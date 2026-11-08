@@ -1,0 +1,32 @@
+{
+	"name": "bok",
+	"version": "0.1.2",
+	"private": true,
+	"type": "module",
+	"workspaces": [
+		"apps/*",
+		"packages/*"
+	],
+	"engines": {
+		"node": ">=24"
+	},
+	"scripts": {
+		"dev": "npm run dev -w @bok/web",
+		"dev:worker": "npm run dev -w @bok/worker",
+		"dev:services": "./scripts/dev-services.sh",
+		"build": "npm run build -w @bok/web && npm run build -w @bok/worker",
+		"check": "npm run check -w @bok/web && tsc -p packages/tsconfig.json --noEmit && tsc -p apps/worker/tsconfig.json --noEmit",
+		"test": "vitest run && npm test -w @bok/web",
+		"db:generate": "npm run generate -w @bok/db",
+		"db:migrate": "npm run migrate -w @bok/db",
+		"release": "./scripts/release.sh",
+		"test:db": "TEST_DATABASE_URL=postgres://bok:bok@localhost:5432/bok_test vitest run --no-file-parallelism packages/server",
+		"test:e2e": "node apps/web/e2e/scan.e2e.mjs && ENGINE=zxing node apps/web/e2e/scan.e2e.mjs && node apps/web/e2e/manual.e2e.mjs && node apps/web/e2e/shelves.e2e.mjs && node apps/web/e2e/reading.e2e.mjs"
+	},
+	"devDependencies": {
+		"@types/node": "^24",
+		"playwright-core": "^1.65.0",
+		"typescript": "^6.0.3",
+		"vitest": "^4.1.8"
+	}
+}

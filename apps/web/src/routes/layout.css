@@ -1,0 +1,112 @@
+@import 'tailwindcss';
+@plugin '@tailwindcss/forms';
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+@theme inline {
+	--color-bg: var(--bg);
+	--color-surface: var(--surface);
+	--color-ink: var(--ink);
+	--color-muted: var(--muted);
+	--color-line: var(--line);
+	--color-accent: var(--accent);
+	--color-accent-ink: var(--accent-ink);
+	--color-accent-soft: var(--accent-soft);
+	--color-danger: var(--danger);
+	--color-warn: var(--warn);
+	--font-serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+	--font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+}
+
+:root {
+	--bg: #f6f1e9;
+	--surface: #fffdf9;
+	--ink: #1f1b16;
+	--muted: #6b6257;
+	--line: #e6ddd0;
+	--accent: #2f5d50;
+	--accent-ink: #ffffff;
+	--accent-soft: #dfe9e4;
+	--danger: #a33b2b;
+	--warn: #9a6a12;
+	color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme='light']) {
+		--bg: #15130f;
+		--surface: #1f1c17;
+		--ink: #efe8dc;
+		--muted: #a39886;
+		--line: #332e26;
+		--accent: #7fb8a4;
+		--accent-ink: #0d1a16;
+		--accent-soft: #23332d;
+		--danger: #e07a68;
+		--warn: #e0b45a;
+		color-scheme: dark;
+	}
+}
+:root[data-theme='dark'] {
+	--bg: #15130f;
+	--surface: #1f1c17;
+	--ink: #efe8dc;
+	--muted: #a39886;
+	--line: #332e26;
+	--accent: #7fb8a4;
+	--accent-ink: #0d1a16;
+	--accent-soft: #23332d;
+	--danger: #e07a68;
+	--warn: #e0b45a;
+	color-scheme: dark;
+}
+
+html {
+	-webkit-text-size-adjust: 100%;
+	-webkit-tap-highlight-color: transparent;
+}
+body {
+	@apply bg-bg font-sans text-ink antialiased;
+	overscroll-behavior-y: none;
+}
+
+@layer components {
+	.card {
+		@apply rounded-2xl border border-line bg-surface;
+	}
+	.btn {
+		@apply inline-flex h-12 items-center justify-center gap-2 rounded-xl px-5 font-semibold transition select-none active:scale-[0.98] disabled:opacity-50;
+	}
+	.btn-primary {
+		@apply bg-accent text-accent-ink hover:brightness-110;
+	}
+	.btn-secondary {
+		@apply border border-line bg-surface text-ink hover:bg-line/40;
+	}
+	.btn-danger {
+		@apply bg-danger text-white hover:brightness-110;
+	}
+	.btn-ghost {
+		@apply text-accent hover:bg-accent-soft;
+	}
+	.input {
+		@apply block h-12 w-full rounded-xl border-line bg-surface px-4 text-base text-ink placeholder:text-muted/70 focus:border-accent focus:ring-accent;
+	}
+	textarea.input {
+		@apply h-auto py-3;
+	}
+	select.input {
+		@apply pr-10;
+	}
+	.label {
+		@apply mb-1.5 block text-sm font-medium;
+	}
+	.field-error {
+		@apply mt-1.5 text-sm text-danger;
+	}
+	.section-title {
+		@apply mb-2 px-1 text-xs font-semibold tracking-wider text-muted uppercase;
+	}
+	.page {
+		@apply mx-auto w-full max-w-2xl px-4 pt-4 pb-28;
+	}
+}

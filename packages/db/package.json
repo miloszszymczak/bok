@@ -1,0 +1,23 @@
+{
+	"name": "@bok/db",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts",
+		"./schema": "./src/schema/index.ts",
+		"./migrate": "./src/migrate.ts"
+	},
+	"scripts": {
+		"generate": "drizzle-kit generate",
+		"migrate": "node --env-file-if-exists=../../.env --experimental-strip-types src/migrate-cli.ts"
+	},
+	"dependencies": {
+		"@bok/core": "*",
+		"drizzle-orm": "^0.45.4",
+		"postgres": "^3.4.9"
+	},
+	"devDependencies": {
+		"drizzle-kit": "^0.31.11"
+	}
+}

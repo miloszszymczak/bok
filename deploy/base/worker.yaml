@@ -1,0 +1,58 @@
+# Worker: pg-boss jobs (cover mirroring, cron). /metrics and /healthz on :9091 (cluster-internal only).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bok-worker
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels: { app.kubernetes.io/name: bok-worker }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: bok-worker }
+    spec:
+      imagePullSecrets:
+        - name: bok-registry
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: worker
+          image: bok
+          command: ["node", "apps/worker/dist/index.js"]
+          ports:
+            - { name: metrics, containerPort: 9091 }
+          env:
+            - { name: SERVICE_NAME, value: bok-worker }
+          envFrom:
+            - configMapRef: { name: bok-config }
+            - secretRef: { name: bok-secrets }
+          livenessProbe:
+            httpGet: { path: /healthz, port: metrics }
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          resources:
+            requests: { cpu: 50m, memory: 192Mi }
+            limits: { memory: 768Mi }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bok-worker-metrics
+spec:
+  selector: { app.kubernetes.io/name: bok-worker }
+  ports:
+    - { name: metrics, port: 9091, targetPort: metrics }

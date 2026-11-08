@@ -1,0 +1,11 @@
+**/node_modules
+**/.svelte-kit
+**/build
+**/dist
+apps/web/src/lib/paraglide
+.env
+.env.*
+deploy/overlays/*/secrets.env
+docs
+**/*.map
+.git

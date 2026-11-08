@@ -1,0 +1,12 @@
+node_modules
+.DS_Store
+.env
+.env.*
+!.env.example
+deploy/overlays/*/secrets.env
+dist
+build
+.svelte-kit
+apps/web/src/lib/paraglide
+project.inlang/cache/
+coverage
