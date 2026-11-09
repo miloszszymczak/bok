@@ -1,62 +1,107 @@
 @import 'tailwindcss';
 @plugin '@tailwindcss/forms';
 
+/* Fonts are self-hosted (offline PWA, strict CSP); only the latin + latin-ext subsets (Polish). */
+@import '@fontsource/fredoka/latin-500.css';
+@import '@fontsource/fredoka/latin-ext-500.css';
+@import '@fontsource/fredoka/latin-600.css';
+@import '@fontsource/fredoka/latin-ext-600.css';
+@import '@fontsource/fredoka/latin-700.css';
+@import '@fontsource/fredoka/latin-ext-700.css';
+@import '@fontsource/nunito/latin-400.css';
+@import '@fontsource/nunito/latin-ext-400.css';
+@import '@fontsource/nunito/latin-400-italic.css';
+@import '@fontsource/nunito/latin-ext-400-italic.css';
+@import '@fontsource/nunito/latin-600.css';
+@import '@fontsource/nunito/latin-ext-600.css';
+@import '@fontsource/nunito/latin-700.css';
+@import '@fontsource/nunito/latin-ext-700.css';
+
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 
+/*
+ * "Ink & Paper": cel-shaded, comic-like but calm. Flat fills, solid ink outlines, hard offset
+ * shadows without blur, a darker band at the bottom of buttons instead of gradients.
+ * Pastel accents are fills only; text on them is ink. --accent-text is the readable shade.
+ */
 @theme inline {
 	--color-bg: var(--bg);
 	--color-surface: var(--surface);
 	--color-ink: var(--ink);
 	--color-muted: var(--muted);
 	--color-line: var(--line);
+	--color-outline: var(--outline);
 	--color-accent: var(--accent);
 	--color-accent-ink: var(--accent-ink);
 	--color-accent-soft: var(--accent-soft);
+	--color-accent-text: var(--accent-text);
+	--color-apricot: var(--apricot);
 	--color-danger: var(--danger);
 	--color-warn: var(--warn);
-	--font-serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
-	--font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+	/* "serif" is the display face across the app (headings, titles). */
+	--font-serif: 'Fredoka', 'Nunito', system-ui, sans-serif;
+	--font-sans: 'Nunito', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+	/* Less round than Tailwind's defaults. */
+	--radius-sm: 0.1875rem;
+	--radius: 0.3125rem;
+	--radius-md: 0.4375rem;
+	--radius-lg: 0.5rem;
+	--radius-xl: 0.625rem;
+	--radius-2xl: 0.75rem;
+	--radius-3xl: 1rem;
 }
 
 :root {
-	--bg: #f6f1e9;
-	--surface: #fffdf9;
-	--ink: #1f1b16;
-	--muted: #6b6257;
-	--line: #e6ddd0;
-	--accent: #2f5d50;
-	--accent-ink: #ffffff;
-	--accent-soft: #dfe9e4;
+	--bg: #f3eee4;
+	--surface: #fbf8f2;
+	--ink: #2e2a26;
+	--muted: #5e564d;
+	--line: #d9cfc0;
+	--outline: #2e2a26;
+	--accent: #9db8a6;
+	--accent-ink: #2e2a26;
+	--accent-soft: #dce7df;
+	--accent-text: #4a6b58;
+	--apricot: #e3b38b;
 	--danger: #a33b2b;
-	--warn: #9a6a12;
+	--warn: #8a5a10;
+	--shade: rgba(46, 42, 38, 0.14);
 	color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
 	:root:not([data-theme='light']) {
-		--bg: #15130f;
-		--surface: #1f1c17;
-		--ink: #efe8dc;
-		--muted: #a39886;
-		--line: #332e26;
-		--accent: #7fb8a4;
-		--accent-ink: #0d1a16;
-		--accent-soft: #23332d;
-		--danger: #e07a68;
-		--warn: #e0b45a;
+		--bg: #2b303a;
+		--surface: #363c48;
+		--ink: #e8e4da;
+		--muted: #b3aea3;
+		--line: #4a5160;
+		--outline: #16191e;
+		--accent: #8fae8b;
+		--accent-ink: #16191e;
+		--accent-soft: #3c4a42;
+		--accent-text: #a9c6a5;
+		--apricot: #d9967e;
+		--danger: #e8907c;
+		--warn: #dcb96e;
+		--shade: rgba(22, 25, 30, 0.22);
 		color-scheme: dark;
 	}
 }
 :root[data-theme='dark'] {
-	--bg: #15130f;
-	--surface: #1f1c17;
-	--ink: #efe8dc;
-	--muted: #a39886;
-	--line: #332e26;
-	--accent: #7fb8a4;
-	--accent-ink: #0d1a16;
-	--accent-soft: #23332d;
-	--danger: #e07a68;
-	--warn: #e0b45a;
+	--bg: #2b303a;
+	--surface: #363c48;
+	--ink: #e8e4da;
+	--muted: #b3aea3;
+	--line: #4a5160;
+	--outline: #16191e;
+	--accent: #8fae8b;
+	--accent-ink: #16191e;
+	--accent-soft: #3c4a42;
+	--accent-text: #a9c6a5;
+	--apricot: #d9967e;
+	--danger: #e8907c;
+	--warn: #dcb96e;
+	--shade: rgba(22, 25, 30, 0.22);
 	color-scheme: dark;
 }
 
@@ -68,28 +113,87 @@ body {
 	@apply bg-bg font-sans text-ink antialiased;
 	overscroll-behavior-y: none;
 }
+:focus-visible {
+	outline: 3px solid var(--accent-text);
+	outline-offset: 2px;
+}
+
+/*
+ * `text-accent` was the link/emphasis colour everywhere; on pastel fills that would be unreadable,
+ * so it maps to the darker shade. Fills (bg-accent) keep the pastel.
+ */
+.text-accent {
+	color: var(--accent-text);
+}
 
 @layer components {
 	.card {
-		@apply rounded-2xl border border-line bg-surface;
+		border-radius: var(--radius-xl);
+		border: 2.5px solid var(--outline);
+		background: var(--surface);
+		box-shadow: 4px 4px 0 var(--outline);
 	}
 	.btn {
-		@apply inline-flex h-12 items-center justify-center gap-2 rounded-xl px-5 font-semibold transition select-none active:scale-[0.98] disabled:opacity-50;
+		@apply inline-flex h-12 items-center justify-center gap-2 px-5 font-bold select-none disabled:opacity-50;
+		border-radius: var(--radius-xl);
+		border: 2.5px solid var(--outline);
+		box-shadow:
+			3px 3px 0 var(--outline),
+			inset 0 -5px 0 var(--shade);
+		transition:
+			transform 80ms ease-out,
+			box-shadow 80ms ease-out,
+			filter 120ms;
+	}
+	/* Pressed: the button sinks into its shadow. */
+	.btn:active:not(:disabled) {
+		transform: translate(2px, 2px);
+		box-shadow:
+			1px 1px 0 var(--outline),
+			inset 0 -3px 0 var(--shade);
 	}
 	.btn-primary {
-		@apply bg-accent text-accent-ink hover:brightness-110;
+		background: var(--accent);
+		color: var(--accent-ink);
+	}
+	.btn-primary:hover {
+		filter: brightness(1.04);
 	}
 	.btn-secondary {
-		@apply border border-line bg-surface text-ink hover:bg-line/40;
+		background: var(--surface);
+		color: var(--ink);
+	}
+	.btn-secondary:hover {
+		background: var(--accent-soft);
 	}
 	.btn-danger {
-		@apply bg-danger text-white hover:brightness-110;
+		background: var(--danger);
+		color: #fff;
 	}
+	/* Quiet buttons (toolbar actions, links styled as buttons): no outline, no shadow. */
 	.btn-ghost {
-		@apply text-accent hover:bg-accent-soft;
+		border-color: transparent;
+		box-shadow: none;
+		color: var(--accent-text);
+	}
+	.btn-ghost:hover {
+		background: var(--accent-soft);
+	}
+	.btn-ghost:active:not(:disabled) {
+		transform: none;
+		box-shadow: none;
 	}
 	.input {
-		@apply block h-12 w-full rounded-xl border-line bg-surface px-4 text-base text-ink placeholder:text-muted/70 focus:border-accent focus:ring-accent;
+		@apply block h-12 w-full px-4 text-base text-ink placeholder:text-muted/80;
+		border-radius: var(--radius-xl);
+		border: 2px solid var(--outline);
+		background: var(--surface);
+	}
+	.input:focus {
+		border-color: var(--outline);
+		--tw-ring-color: var(--accent);
+		--tw-ring-shadow: 0 0 0 3px var(--accent);
+		box-shadow: var(--tw-ring-shadow);
 	}
 	textarea.input {
 		@apply h-auto py-3;
@@ -98,15 +202,27 @@ body {
 		@apply pr-10;
 	}
 	.label {
-		@apply mb-1.5 block text-sm font-medium;
+		@apply mb-1.5 block text-sm font-bold;
 	}
 	.field-error {
-		@apply mt-1.5 text-sm text-danger;
+		@apply mt-1.5 text-sm font-semibold text-danger;
 	}
 	.section-title {
-		@apply mb-2 px-1 text-xs font-semibold tracking-wider text-muted uppercase;
+		@apply mb-2.5 px-1 text-xs font-bold tracking-wider text-muted uppercase;
 	}
 	.page {
-		@apply mx-auto w-full max-w-2xl px-4 pt-4 pb-28;
+		@apply mx-auto w-full max-w-2xl px-5 pt-4 pb-32;
+	}
+	/* Inline chip inside running text (book references): stays within the line box. */
+	.chip-inline {
+		display: inline;
+		padding: 1px 6px;
+		border: 1.5px solid var(--outline);
+		border-radius: var(--radius);
+		background: var(--accent);
+		color: var(--accent-ink);
+		font-weight: 700;
+		-webkit-box-decoration-break: clone;
+		box-decoration-break: clone;
 	}
 }

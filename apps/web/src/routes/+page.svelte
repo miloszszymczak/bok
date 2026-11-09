@@ -32,14 +32,14 @@
 		</div>
 	</main>
 {:else}
-	<header class="mx-auto flex max-w-2xl items-center justify-between px-4 pt-[max(1rem,env(safe-area-inset-top))]">
+	<header class="mx-auto flex max-w-2xl items-center justify-between px-5 pt-[max(1.25rem,env(safe-area-inset-top))]">
 		<p class="font-serif text-3xl font-bold">bok</p>
 		<div class="flex gap-2">
-			<a href="/notifications" class="relative grid size-11 place-items-center rounded-full border border-line bg-surface" aria-label={m.notifications_title()} data-testid="bell">
+			<a href="/notifications" class="relative grid size-11 place-items-center rounded-lg border-[2.5px] border-outline bg-surface shadow-[3px_3px_0_var(--outline)]" aria-label={m.notifications_title()} data-testid="bell">
 				<Icon name="bell" />
-				{#if live.unread}<span class="absolute -top-0.5 -right-0.5 min-w-5 rounded-full bg-danger px-1 text-center text-[11px] leading-5 font-bold text-white">{live.unread > 9 ? '9+' : live.unread}</span>{/if}
+				{#if live.unread}<span class="absolute -top-2 -right-2 min-w-5 rounded-full border-2 border-outline bg-apricot px-1 text-center text-[11px] leading-4 font-bold text-accent-ink">{live.unread > 9 ? '9+' : live.unread}</span>{/if}
 			</a>
-			<a href="/search" class="grid size-11 place-items-center rounded-full border border-line bg-surface" aria-label={m.nav_search()}><Icon name="search" /></a>
+			<a href="/search" class="grid size-11 place-items-center rounded-lg border-[2.5px] border-outline bg-surface shadow-[3px_3px_0_var(--outline)]" aria-label={m.nav_search()}><Icon name="search" /></a>
 		</div>
 	</header>
 	<main class="page space-y-6">
@@ -53,15 +53,15 @@
 		{/if}
 
 		<section class="grid grid-cols-2 gap-3">
-			<a href="/scan" class="card flex flex-col gap-2 p-4 active:scale-[0.99]">
-				<Icon name="scan" class="text-accent" size={28} />
-				<span class="font-semibold">{m.home_action_scan()}</span>
-				<span class="text-sm text-muted">{m.home_action_scan_hint()}</span>
+			<a href="/scan" class="card flex flex-col gap-2 p-4 text-accent-ink !bg-accent shadow-[4px_4px_0_var(--outline),inset_0_-10px_0_var(--shade)] active:translate-x-0.5 active:translate-y-0.5">
+				<Icon name="scan" size={28} />
+				<span class="font-serif text-lg font-semibold">{m.home_action_scan()}</span>
+				<span class="text-sm opacity-85">{m.home_action_scan_hint()}</span>
 			</a>
-			<a href="/search" class="card flex flex-col gap-2 p-4 active:scale-[0.99]">
-				<Icon name="search" class="text-accent" size={28} />
-				<span class="font-semibold">{m.home_action_search()}</span>
-				<span class="text-sm text-muted">{m.home_action_search_hint()}</span>
+			<a href="/search" class="card flex flex-col gap-2 p-4 text-accent-ink !bg-apricot shadow-[4px_4px_0_var(--outline),inset_0_-10px_0_var(--shade)] active:translate-x-0.5 active:translate-y-0.5">
+				<Icon name="search" size={28} />
+				<span class="font-serif text-lg font-semibold">{m.home_action_search()}</span>
+				<span class="text-sm opacity-85">{m.home_action_search_hint()}</span>
 			</a>
 		</section>
 

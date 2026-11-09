@@ -80,7 +80,7 @@
 {/if}
 
 {#if selecting}
-	<div class="fixed inset-x-0 bottom-16 z-30 px-4 pb-[env(safe-area-inset-bottom)]">
+	<div class="fixed inset-x-0 bottom-[calc(7.5rem+env(safe-area-inset-bottom))] z-40 px-4">
 		<div class="mx-auto flex max-w-2xl items-center gap-2 rounded-2xl bg-ink p-2 pl-4 text-bg shadow-lg">
 			<span class="flex-1 text-sm font-medium">{m.list_selected({ count: selected.size })}</span>
 			<button class="btn h-10 bg-bg px-3 text-sm text-ink" onclick={() => (selected = new Set(books.map((b) => b.copyId)))}>{m.list_select_all()}</button>

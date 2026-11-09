@@ -16,12 +16,11 @@
 				class="text-accent underline">{@render render(n.c, `${path}.${i}`)}</a
 			>{:else if n.t === 'mention'}<a href="/u/{n.handle}" class="font-semibold text-accent">@{n.handle}</a>{:else if n.t === 'tag'}<a href="/t/{n.slug}" class="text-accent">#{n.tag}</a>{:else if n.t === 'book'}{@const b = books[n.workId]}<a
 				href="/book/{n.workId}{n.editionId ? `?e=${n.editionId}` : ''}"
-				class="mx-0.5 inline-flex max-w-full items-center gap-1.5 rounded-lg bg-accent-soft py-0.5 pr-2 pl-0.5 align-middle text-[0.95em] font-semibold text-accent"
-				data-book-chip={n.workId}
-				>{#if b?.cover && !compact}<img src={b.cover} alt="" class="h-6 w-4 rounded-sm object-cover" loading="lazy" />{:else}<span aria-hidden="true">📖</span>{/if}<span class="truncate">{b?.title ?? n.title}</span></a
+				class="chip-inline"
+				data-book-chip={n.workId}>{b?.title ?? n.title}</a
 			>{:else if n.t === 'spoiler'}{@const id = `${path}.${i}`}<button
 				type="button"
-				class="rounded px-0.5 transition {revealed.has(id) ? 'bg-line/60' : 'bg-ink/80 text-transparent blur-[3px] select-none'}"
+				class="rounded px-1 [box-decoration-break:clone] transition {revealed.has(id) ? 'bg-accent-soft' : 'border-[1.5px] border-dashed border-muted bg-[repeating-linear-gradient(-45deg,var(--line)_0_6px,var(--bg)_6px_12px)] text-transparent select-none'}"
 				aria-label={revealed.has(id) ? undefined : m.spoiler_inline()}
 				onclick={(e) => {
 					e.preventDefault();
@@ -32,4 +31,4 @@
 	{/each}
 {/snippet}
 
-<div class="leading-relaxed break-words whitespace-pre-wrap">{@render render(nodes, 'r')}</div>
+<div class="leading-[1.65] break-words whitespace-pre-wrap">{@render render(nodes, 'r')}</div>

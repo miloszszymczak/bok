@@ -32,6 +32,10 @@ const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, de
 const page = await ctx.newPage();
 const errors = [];
 page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+// Dev only: Vite serves fonts from /@fs/…node_modules, which the service worker can't precache
+// (builds precache them with /_app/immutable). A subset first needed while offline fails there.
+let devFontFailures = 0;
+page.on('requestfailed', (r) => /\/@fs\/.*\.woff2?$/.test(r.url()) && devFontFailures++);
 page.on('pageerror', (e) => errors.push(e.message));
 let failed = false;
 const check = (ok, label) => {
@@ -95,7 +99,8 @@ try {
 	failed = true;
 	console.error(e);
 } finally {
-	check(errors.length === 0, `no console errors ${errors.length ? JSON.stringify(errors) : ''}`);
+	const real = errors.filter((e, i) => !(e.startsWith('Failed to load resource') && i < errors.length && devFontFailures-- > 0));
+	check(real.length === 0, `no console errors ${real.length ? JSON.stringify(real) : ''}`);
 	console.log(`screenshots: ${out}`);
 	await browser.close();
 	process.exit(failed ? 1 : 0);

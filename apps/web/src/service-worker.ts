@@ -53,13 +53,16 @@ self.addEventListener('fetch', (event) => {
 
 	// Hashed build output never changes: cache-first, and cache anything not precached on first
 	// use (e.g. the decoder's WASM, which the manifest doesn't list) so scanning works offline.
-	if (PRECACHE.includes(url.pathname) || url.pathname.startsWith('/_app/immutable/')) {
+	// Fonts too (hashed in builds; dev serves them from node_modules paths): the UI must not
+	// fall back to system fonts, or fail to load them, when offline.
+	const font = req.destination === 'font' || /\.woff2?$/.test(url.pathname);
+	if (PRECACHE.includes(url.pathname) || url.pathname.startsWith('/_app/immutable/') || font) {
 		event.respondWith(
 			caches.match(req).then(
 				(hit) =>
 					hit ??
 					fetch(req).then(async (res) => {
-						if (res.ok && url.pathname.startsWith('/_app/immutable/')) await (await caches.open(SHELL)).put(req, res.clone());
+						if (res.ok && (url.pathname.startsWith('/_app/immutable/') || font)) await (await caches.open(SHELL)).put(req, res.clone());
 						return res;
 					})
 			)
