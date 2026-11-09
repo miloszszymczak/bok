@@ -7,8 +7,8 @@
 	"scope": "/",
 	"display": "standalone",
 	"orientation": "portrait",
-	"background_color": "#f6f1e9",
-	"theme_color": "#2f5d50",
+	"background_color": "#f3eee4",
+	"theme_color": "#f3eee4",
 	"categories": ["books", "lifestyle", "social"],
 	"icons": [
 		{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },

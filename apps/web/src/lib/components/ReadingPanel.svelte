@@ -38,7 +38,8 @@
 		past,
 		pages,
 		medianRate,
-		openFinish = false
+		openFinish = false,
+		defaultVisibility = 'public'
 	}: {
 		title: string;
 		status: Status | null;
@@ -49,6 +50,7 @@
 		pages: number | null;
 		medianRate: number | null;
 		openFinish?: boolean;
+		defaultVisibility?: 'public' | 'followers' | 'friends' | 'private';
 	} = $props();
 
 	// svelte-ignore state_referenced_locally
@@ -151,6 +153,6 @@
 	{startedAt}
 	pages={current?.total ?? pages}
 	{medianRate}
-	initial={{ outcome: finishOutcome, date: null, precision: 'day', rating: null, review: '', reviewSpoiler: false, durationDaysOverride: null, pace: null, visibility: 'public' }}
+	initial={{ outcome: finishOutcome, date: null, precision: 'day', rating: null, review: '', reviewSpoiler: false, durationDaysOverride: null, pace: null, visibility: defaultVisibility }}
 />
 {/if}

@@ -32,7 +32,7 @@ export function createTagging(deps: { db: Db; storage: Storage }) {
 	const { db, storage } = deps;
 	const cover = (key: string | null, src: string | null) => (key ? storage.url(`${key}-s.webp`) : src);
 
-	return {
+	const api = {
 		/** Tags I use, most used first (library/log filters). */
 		async mine(userId: string) {
 			return db
@@ -103,7 +103,7 @@ export function createTagging(deps: { db: Db; storage: Storage }) {
 		/** Series this work belongs to, with all its works in order and my status for each. */
 		async seriesForWork(userId: string | null, workId: string) {
 			const links = await db.select({ seriesId: workSeries.seriesId }).from(workSeries).where(eq(workSeries.workId, workId));
-			return Promise.all(links.map((l) => this.series(userId, l.seriesId)));
+			return Promise.all(links.map((l) => api.series(userId, l.seriesId)));
 		},
 
 		async series(userId: string | null, seriesId: string) {
@@ -139,6 +139,7 @@ export function createTagging(deps: { db: Db; storage: Storage }) {
 			});
 		}
 	};
+	return api;
 }
 
 export type Tagging = ReturnType<typeof createTagging>;

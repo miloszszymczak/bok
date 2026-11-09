@@ -5,6 +5,7 @@
 	import RatingInput from './RatingInput.svelte';
 	import { m } from '#lib/paraglide/messages.js';
 	import { daysText, paceLabel } from '#lib/utils/reading.ts';
+	import { todayLocal } from '#lib/utils/loans.ts';
 
 	export interface FinishValues {
 		outcome: 'finished' | 'dnf';
@@ -40,7 +41,7 @@
 		ondelete?: () => void;
 	} = $props();
 
-	const todayIso = new Date().toISOString().slice(0, 10);
+	const todayIso = todayLocal(); // the device's calendar day, not UTC
 	// svelte-ignore state_referenced_locally
 	let outcome = $state(initial.outcome);
 	// svelte-ignore state_referenced_locally

@@ -1,6 +1,8 @@
+import { sql } from 'drizzle-orm';
 
 import {
 	boolean,
+	check,
 	date,
 	index,
 	integer,
@@ -14,6 +16,7 @@ import {
 	real,
 	timestamp,
 	unique,
+	uniqueIndex,
 	uuid
 } from 'drizzle-orm/pg-core';
 import { user } from './auth.ts';
@@ -22,6 +25,8 @@ import { citext, id, timestamps } from './types.ts';
 // ── People ────────────────────────────────────────────────────────────────────
 
 export const roleEnum = pgEnum('role', ['user', 'admin']);
+/** Who may see something: everyone, followers (and friends), friends, only me. */
+export const visibilityEnum = pgEnum('visibility', ['public', 'followers', 'friends', 'private']);
 
 export const profiles = pgTable('profiles', {
 	userId: uuid('user_id')
@@ -34,9 +39,22 @@ export const profiles = pgTable('profiles', {
 	locale: text('locale').notNull().default('en'),
 	timezone: text('timezone').notNull().default('Europe/Warsaw'),
 	role: roleEnum('role').notNull().default('user'),
+	/** Who can see my library (shelves) and what I lend. */
+	libraryVisibility: visibilityEnum('library_visibility').notNull().default('followers'),
+	lendingVisibility: visibilityEnum('lending_visibility').notNull().default('friends'),
+	/** Default visibility for new log entries. */
+	logVisibility: visibilityEnum('log_visibility').notNull().default('public'),
+	/** Local hours (0–23) without push notifications; null = never quiet. */
+	quietFrom: smallint('quiet_from'),
+	quietTo: smallint('quiet_to'),
+	/** Folded "display name handle" for people search. */
+	searchName: text('search_name').notNull().default(''),
+	/** Moderation: hidden = profile not shown to others; suspended = also can't sign in. */
+	hiddenAt: timestamp('hidden_at', { withTimezone: true }),
+	suspendedAt: timestamp('suspended_at', { withTimezone: true }),
 	deletionRequestedAt: timestamp('deletion_requested_at', { withTimezone: true }),
 	...timestamps
-});
+}, (t) => [index('profiles_search_trgm').using('gin', t.searchName.op('gin_trgm_ops'))]);
 
 export const households = pgTable('households', {
 	id: id(),
@@ -340,7 +358,6 @@ export const readFormatEnum = pgEnum('read_format', ['paper', 'ebook', 'audioboo
 export const readOutcomeEnum = pgEnum('read_outcome', ['in_progress', 'finished', 'dnf']);
 export const datePrecisionEnum = pgEnum('date_precision', ['day', 'month', 'year']);
 export const paceEnum = pgEnum('pace', ['intensive', 'usual', 'slow']);
-export const visibilityEnum = pgEnum('visibility', ['public', 'followers', 'friends', 'private']);
 export const readingEventEnum = pgEnum('reading_event', ['started', 'progress', 'stuck', 'resumed', 'finished', 'dnf']);
 
 /** One row per user × work: the status shown everywhere. History lives in `reads`. */
@@ -387,6 +404,8 @@ export const reads = pgTable(
 		durationDaysOverride: integer('duration_days_override'),
 		pace: paceEnum('pace'),
 		visibility: visibilityEnum('visibility').notNull().default('public'),
+		/** When it was finished/abandoned (event time) — orders the home feed. */
+		finishedAt: timestamp('finished_at', { withTimezone: true }),
 		/** Last start/progress/resume — drives the 30-day "stuck" rule. */
 		lastActivityAt: timestamp('last_activity_at', { withTimezone: true }).notNull().defaultNow(),
 		...timestamps
@@ -471,4 +490,389 @@ export const userWorkTags = pgTable(
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(t) => [primaryKey({ columns: [t.userId, t.workId, t.tagId] }), index('user_work_tags_work_idx').on(t.workId), index('user_work_tags_tag_idx').on(t.tagId)]
+);
+
+// ── Social graph ──────────────────────────────────────────────────────────────
+
+export const follows = pgTable(
+	'follows',
+	{
+		followerId: uuid('follower_id')
+			.notNull()
+			.references(() => user.id, { onDelete: 'cascade' }),
+		followeeId: uuid('followee_id')
+			.notNull()
+			.references(() => user.id, { onDelete: 'cascade' }),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(t) => [primaryKey({ columns: [t.followerId, t.followeeId] }), index('follows_followee_idx').on(t.followeeId)]
+);
+
+export const friendshipStatusEnum = pgEnum('friendship_status', ['pending', 'accepted']);
+
+/** One row per pair, stored with userLow < userHigh. */
+export const friendships = pgTable(
+	'friendships',
+	{
+		userLow: uuid('user_low')
+			.notNull()
+			.references(() => user.id, { onDelete: 'cascade' }),
+		userHigh: uuid('user_high')
+			.notNull()
+			.references(() => user.id, { onDelete: 'cascade' }),
+		status: friendshipStatusEnum('status').notNull().default('pending'),
+		requestedBy: uuid('requested_by')
+			.notNull()
+			.references(() => user.id, { onDelete: 'cascade' }),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+		acceptedAt: timestamp('accepted_at', { withTimezone: true })
+	},
+	(t) => [primaryKey({ columns: [t.userLow, t.userHigh] }), index('friendships_high_idx').on(t.userHigh)]
+);
+
+export const blocks = pgTable(
+	'blocks',
+	{
+		blockerId: uuid('blocker_id')
+			.notNull()
+			.references(() => user.id, { onDelete: 'cascade' }),
+		blockedId: uuid('blocked_id')
+			.notNull()
+			.references(() => user.id, { onDelete: 'cascade' }),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(t) => [primaryKey({ columns: [t.blockerId, t.blockedId] }), index('blocks_blocked_idx').on(t.blockedId)]
+);
+
+export const reportReasonEnum = pgEnum('report_reason', ['spam', 'abuse', 'inappropriate', 'impersonation', 'other']);
+export const reportStatusEnum = pgEnum('report_status', ['open', 'dismissed', 'actioned']);
+
+export const reports = pgTable(
+	'reports',
+	{
+		id: id(),
+		reporterId: uuid('reporter_id').references(() => user.id, { onDelete: 'set null' }),
+		/** profile now; post, comment, readlist, read later. */
+		targetType: text('target_type').notNull(),
+		targetId: uuid('target_id').notNull(),
+		/** The account responsible for the target (for suspension). */
+		targetUserId: uuid('target_user_id').references(() => user.id, { onDelete: 'cascade' }),
+		reason: reportReasonEnum('reason').notNull(),
+		details: text('details').notNull().default(''),
+		status: reportStatusEnum('status').notNull().default('open'),
+		action: text('action'),
+		resolvedBy: uuid('resolved_by').references(() => user.id, { onDelete: 'set null' }),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+		resolvedAt: timestamp('resolved_at', { withTimezone: true })
+	},
+	(t) => [index('reports_status_idx').on(t.status, t.createdAt)]
+);
+
+// ── Notifications ─────────────────────────────────────────────────────────────
+
+export const notifications = pgTable(
+	'notifications',
+	{
+		id: id(),
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => user.id, { onDelete: 'cascade' }),
+		type: text('type').notNull(),
+		actorId: uuid('actor_id').references(() => user.id, { onDelete: 'cascade' }),
+		data: jsonb('data').notNull().default({}),
+		/** Prevents duplicates (e.g. one reminder per loan per day). */
+		dedupeKey: text('dedupe_key').unique(),
+		readAt: timestamp('read_at', { withTimezone: true }),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(t) => [index('notifications_user_idx').on(t.userId, t.createdAt)]
+);
+
+export const notificationPrefs = pgTable(
+	'notification_prefs',
+	{
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => user.id, { onDelete: 'cascade' }),
+		type: text('type').notNull(),
+		inapp: boolean('inapp').notNull(),
+		push: boolean('push').notNull(),
+		email: boolean('email').notNull()
+	},
+	(t) => [primaryKey({ columns: [t.userId, t.type] })]
+);
+
+export const pushSubscriptions = pgTable(
+	'push_subscriptions',
+	{
+		id: id(),
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => user.id, { onDelete: 'cascade' }),
+		endpoint: text('endpoint').notNull().unique(),
+		p256dh: text('p256dh').notNull(),
+		auth: text('auth').notNull(),
+		userAgent: text('user_agent').notNull().default(''),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+		lastUsedAt: timestamp('last_used_at', { withTimezone: true })
+	},
+	(t) => [index('push_subscriptions_user_idx').on(t.userId)]
+);
+
+// ── Readlists ─────────────────────────────────────────────────────────────────
+
+/** private = only me; unlisted = anyone with the link (not listed, not indexed); public = listed on my profile. */
+export const readlistVisibilityEnum = pgEnum('readlist_visibility', ['private', 'unlisted', 'public']);
+
+export const readlists = pgTable(
+	'readlists',
+	{
+		id: id(),
+		ownerId: uuid('owner_id')
+			.notNull()
+			.references(() => user.id, { onDelete: 'cascade' }),
+		title: text('title').notNull(),
+		description: text('description').notNull().default(''),
+		visibility: readlistVisibilityEnum('visibility').notNull().default('private'),
+		/** Short, unguessable id for /l/{slug}. */
+		slug: text('slug').notNull().unique(),
+		/** Moderation: hidden lists are treated as private. */
+		hiddenAt: timestamp('hidden_at', { withTimezone: true }),
+		...timestamps
+	},
+	(t) => [index('readlists_owner_idx').on(t.ownerId, t.updatedAt)]
+);
+
+export const readlistItems = pgTable(
+	'readlist_items',
+	{
+		id: id(),
+		readlistId: uuid('readlist_id')
+			.notNull()
+			.references(() => readlists.id, { onDelete: 'cascade' }),
+		workId: uuid('work_id')
+			.notNull()
+			.references(() => works.id, { onDelete: 'cascade' }),
+		editionId: uuid('edition_id').references(() => editions.id, { onDelete: 'set null' }),
+		/** Fractional index (see @bok/core keyBetween); COLLATE "C" set in migration 0005. */
+		position: text('position').notNull(),
+		note: text('note').notNull().default(''),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(t) => [unique('readlist_items_work_uq').on(t.readlistId, t.workId), index('readlist_items_order_idx').on(t.readlistId, t.position)]
+);
+
+export const readlistSaves = pgTable(
+	'readlist_saves',
+	{
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => user.id, { onDelete: 'cascade' }),
+		readlistId: uuid('readlist_id')
+			.notNull()
+			.references(() => readlists.id, { onDelete: 'cascade' }),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(t) => [primaryKey({ columns: [t.userId, t.readlistId] }), index('readlist_saves_list_idx').on(t.readlistId)]
+);
+
+// ── Posts ─────────────────────────────────────────────────────────────────────
+
+export const posts = pgTable(
+	'posts',
+	{
+		id: id(),
+		authorId: uuid('author_id')
+			.notNull()
+			.references(() => user.id, { onDelete: 'cascade' }),
+		/** Canonical post format (see @bok/core post.ts). */
+		body: text('body').notNull(),
+		visibility: visibilityEnum('visibility').notNull().default('public'),
+		/** Whole post is a spoiler (blurred in feeds and previews). */
+		spoiler: boolean('spoiler').notNull().default(false),
+		editedAt: timestamp('edited_at', { withTimezone: true }),
+		hiddenAt: timestamp('hidden_at', { withTimezone: true }),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(t) => [index('posts_author_idx').on(t.authorId, t.createdAt)]
+);
+
+export const postBookRefs = pgTable(
+	'post_book_refs',
+	{
+		postId: uuid('post_id')
+			.notNull()
+			.references(() => posts.id, { onDelete: 'cascade' }),
+		workId: uuid('work_id')
+			.notNull()
+			.references(() => works.id, { onDelete: 'cascade' }),
+		editionId: uuid('edition_id').references(() => editions.id, { onDelete: 'set null' })
+	},
+	(t) => [primaryKey({ columns: [t.postId, t.workId] }), index('post_book_refs_work_idx').on(t.workId)]
+);
+
+export const postMentions = pgTable(
+	'post_mentions',
+	{
+		postId: uuid('post_id')
+			.notNull()
+			.references(() => posts.id, { onDelete: 'cascade' }),
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => user.id, { onDelete: 'cascade' })
+	},
+	(t) => [primaryKey({ columns: [t.postId, t.userId] })]
+);
+
+export const postTags = pgTable(
+	'post_tags',
+	{
+		postId: uuid('post_id')
+			.notNull()
+			.references(() => posts.id, { onDelete: 'cascade' }),
+		tagId: uuid('tag_id')
+			.notNull()
+			.references(() => tags.id, { onDelete: 'cascade' })
+	},
+	(t) => [primaryKey({ columns: [t.postId, t.tagId] }), index('post_tags_tag_idx').on(t.tagId)]
+);
+
+/** One level of comments; a comment is visible wherever its post is. */
+export const comments = pgTable(
+	'comments',
+	{
+		id: id(),
+		postId: uuid('post_id')
+			.notNull()
+			.references(() => posts.id, { onDelete: 'cascade' }),
+		authorId: uuid('author_id')
+			.notNull()
+			.references(() => user.id, { onDelete: 'cascade' }),
+		body: text('body').notNull(),
+		spoiler: boolean('spoiler').notNull().default(false),
+		editedAt: timestamp('edited_at', { withTimezone: true }),
+		hiddenAt: timestamp('hidden_at', { withTimezone: true }),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(t) => [index('comments_post_idx').on(t.postId, t.createdAt)]
+);
+
+export const likes = pgTable(
+	'likes',
+	{
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => user.id, { onDelete: 'cascade' }),
+		targetType: text('target_type', { enum: ['post', 'comment'] }).notNull(),
+		targetId: uuid('target_id').notNull(),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(t) => [primaryKey({ columns: [t.userId, t.targetType, t.targetId] }), index('likes_target_idx').on(t.targetType, t.targetId)]
+);
+
+// ── Lending ───────────────────────────────────────────────────────────────────
+
+export const loanStatusEnum = pgEnum('loan_status', ['requested', 'active', 'returned', 'declined', 'cancelled']);
+
+/**
+ * One loan. Each side is either a user (`*_id`) or just a name for someone outside the app.
+ * Lending my copy: copy_id set, lender = me. Borrowing from outside: no copy, lender_name set.
+ */
+export const loans = pgTable(
+	'loans',
+	{
+		id: id(),
+		copyId: uuid('copy_id').references(() => copies.id, { onDelete: 'set null' }),
+		workId: uuid('work_id')
+			.notNull()
+			.references(() => works.id, { onDelete: 'cascade' }),
+		editionId: uuid('edition_id').references(() => editions.id, { onDelete: 'set null' }),
+		lenderId: uuid('lender_id').references(() => user.id, { onDelete: 'cascade' }),
+		lenderName: text('lender_name'),
+		borrowerId: uuid('borrower_id').references(() => user.id, { onDelete: 'cascade' }),
+		borrowerName: text('borrower_name'),
+		status: loanStatusEnum('status').notNull(),
+		requestedAt: timestamp('requested_at', { withTimezone: true }),
+		lentOn: date('lent_on'),
+		dueOn: date('due_on'),
+		returnedOn: date('returned_on'),
+		/** The borrower says it's back; the lender confirms (→ returned). */
+		returnMarkedAt: timestamp('return_marked_at', { withTimezone: true }),
+		/** Pending extension request: the date the borrower asked for. */
+		extensionTo: date('extension_to'),
+		note: text('note').notNull().default(''),
+		...timestamps
+	},
+	(t) => [
+		check('loans_lender_present', sql`${t.lenderId} is not null or ${t.lenderName} is not null`),
+		check('loans_borrower_present', sql`${t.borrowerId} is not null or ${t.borrowerName} is not null`),
+		check('loans_someone_in_app', sql`${t.lenderId} is not null or ${t.borrowerId} is not null`),
+		uniqueIndex('loans_copy_active_uq').on(t.copyId).where(sql`${t.status} = 'active' and ${t.copyId} is not null`),
+		index('loans_lender_idx').on(t.lenderId, t.status),
+		index('loans_borrower_idx').on(t.borrowerId, t.status),
+		index('loans_due_idx').on(t.dueOn).where(sql`${t.status} = 'active'`)
+	]
+);
+
+// ── Import ────────────────────────────────────────────────────────────────────
+
+export const importStatusEnum = pgEnum('import_status', ['preview', 'queued', 'running', 'done', 'failed', 'cancelled']);
+export const importRowStatusEnum = pgEnum('import_row_status', ['pending', 'matched', 'review', 'failed', 'skipped', 'applied']);
+
+export interface ImportOptions {
+	/** 5 = Goodreads stars, 10 = lubimyczytac. */
+	ratingScale: 5 | 10;
+	shelvesAs: 'tags' | 'readlists' | 'none';
+	copies: boolean;
+	visibility: 'public' | 'followers' | 'friends' | 'private';
+}
+export interface ImportStats {
+	total: number;
+	processed: number;
+	matched: number;
+	created: number;
+	review: number;
+	failed: number;
+	skipped: number;
+}
+
+/** An uploaded CSV (Goodreads or a lubimyczytac community export). Rows are parsed at upload. */
+export const imports = pgTable(
+	'imports',
+	{
+		id: id(),
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => user.id, { onDelete: 'cascade' }),
+		source: text('source').notNull(),
+		fileName: text('file_name').notNull().default(''),
+		status: importStatusEnum('status').notNull().default('preview'),
+		options: jsonb('options').$type<ImportOptions>().notNull(),
+		stats: jsonb('stats').$type<ImportStats>().notNull(),
+		error: text('error'),
+		startedAt: timestamp('started_at', { withTimezone: true }),
+		finishedAt: timestamp('finished_at', { withTimezone: true }),
+		...timestamps
+	},
+	(t) => [index('imports_user_idx').on(t.userId, t.createdAt)]
+);
+
+export const importRows = pgTable(
+	'import_rows',
+	{
+		id: id(),
+		importId: uuid('import_id')
+			.notNull()
+			.references(() => imports.id, { onDelete: 'cascade' }),
+		line: integer('line').notNull(),
+		/** Normalised row (see @bok/core import.ts). Cleared 30 days after the import. */
+		raw: jsonb('raw').notNull(),
+		status: importRowStatusEnum('status').notNull().default('pending'),
+		/** How it was matched: isbn / title / created / chosen, plus candidates for review. */
+		match: jsonb('match'),
+		result: jsonb('result'),
+		error: text('error'),
+		updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(t) => [unique('import_rows_line_uq').on(t.importId, t.line), index('import_rows_status_idx').on(t.importId, t.status)]
 );

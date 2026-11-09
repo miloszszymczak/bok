@@ -17,6 +17,7 @@
 
 <TopBar title={m.nav_library()}>
 	{#snippet actions()}
+		<a href="/loans" class="btn btn-ghost h-10 px-3" aria-label={m.loans_title()} data-testid="loans-link"><Icon name="swap" /></a>
 		<a href="/scan" class="btn btn-ghost h-10 px-3" aria-label={m.nav_scan()}><Icon name="plus" /></a>
 	{/snippet}
 </TopBar>

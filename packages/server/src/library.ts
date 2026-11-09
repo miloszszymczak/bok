@@ -25,6 +25,14 @@ export interface OwnedCopy {
 	state: 'shelved' | 'lent' | 'lost';
 	createdAt: string;
 	sectionId: string | null;
+	/** Active loan: who has it and until when. */
+	lentTo?: string | null;
+	dueOn?: string | null;
+}
+
+export interface BorrowedSummary {
+	from: string;
+	dueOn: string | null;
 }
 
 export type ScanResult =
@@ -52,17 +60,21 @@ export interface CheckResult {
 	copies: OwnedCopy[];
 	sameWorkOtherEditions: number;
 	reading?: ReadingSummary;
+	borrowed?: BorrowedSummary[];
 }
 
+const lentToSql = sql<string | null>`(select coalesce(bp.display_name, l.borrower_name) from loans l left join profiles bp on bp.user_id = l.borrower_id where l.copy_id = "copies"."id" and l.status = 'active' limit 1)`;
+const dueOnSql = sql<string | null>`(select l.due_on::text from loans l where l.copy_id = "copies"."id" and l.status = 'active' limit 1)`;
 const authorsSql = sql<string[]>`coalesce((select array_agg(a.name order by wa.position) from work_authors wa join authors a on a.id = wa.author_id where wa.work_id = ${works.id}), '{}')`;
 
 export function createLibrary(deps: { db: Db; catalog: Catalog; accounts: Accounts; storage: Storage; shelves: Shelves }) {
 	const { db, catalog, accounts, storage, shelves } = deps;
-	const copyOut = (c: { id: string; state: OwnedCopy['state']; createdAt: Date; sectionId: string | null }): OwnedCopy => ({
+	const copyOut = (c: { id: string; state: OwnedCopy['state']; createdAt: Date; sectionId: string | null; lentTo?: string | null; dueOn?: string | null }): OwnedCopy => ({
 		id: c.id,
 		state: c.state,
 		createdAt: c.createdAt.toISOString(),
-		sectionId: c.sectionId
+		sectionId: c.sectionId,
+		...(c.lentTo ? { lentTo: c.lentTo, dueOn: c.dueOn ?? null } : {})
 	});
 	const cover = (key: string | null, src: string | null) => (key ? storage.url(`${key}-s.webp`) : src);
 	const myHouseholds = (userId: string) =>
@@ -92,7 +104,7 @@ export function createLibrary(deps: { db: Db; catalog: Catalog; accounts: Accoun
 
 	async function ownedCopies(userId: string, editionId: string): Promise<OwnedCopy[]> {
 		const rows = await db
-			.select({ id: copies.id, state: copies.state, createdAt: copies.createdAt, sectionId: copies.sectionId })
+			.select({ id: copies.id, state: copies.state, createdAt: copies.createdAt, sectionId: copies.sectionId, lentTo: lentToSql, dueOn: dueOnSql })
 			.from(copies)
 			.where(and(eq(copies.editionId, editionId), sql`${copies.householdId} in ${myHouseholds(userId)}`))
 			.orderBy(copies.createdAt);
@@ -119,6 +131,9 @@ export function createLibrary(deps: { db: Db; catalog: Catalog; accounts: Accoun
 			if (input.sectionId && !UUID.test(input.sectionId)) return { status: 'invalid' };
 			const already = await db.query.copies.findFirst({ where: eq(copies.id, input.clientId) });
 			if (already) {
+				// A retry of my own scan — never report someone else's copy that happens to have this id.
+				const mine = await db.select({ id: householdMembers.householdId }).from(householdMembers).where(and(eq(householdMembers.userId, input.userId), eq(householdMembers.householdId, already.householdId)));
+				if (!mine.length) return { status: 'invalid' };
 				const book = (await summary(already.editionId))!;
 				return { status: 'added', copy: copyOut(already), book, otherCopies: 0, sameWorkOtherEditions: 0 };
 			}
@@ -209,7 +224,13 @@ export function createLibrary(deps: { db: Db; catalog: Catalog; accounts: Accoun
 				book: (await summary(r.editionId)) ?? undefined,
 				copies: await ownedCopies(userId, r.editionId),
 				sameWorkOtherEditions: await sameWorkOtherEditions(userId, r.workId, r.editionId),
-				reading: { status: rs?.status ?? null, timesRead: rs?.times_read ?? 0, lastRating: rs?.last_rating ?? null }
+				reading: { status: rs?.status ?? null, timesRead: rs?.times_read ?? 0, lastRating: rs?.last_rating ?? null },
+				borrowed: (
+					await db.execute<{ from: string; due_on: string | null }>(sql`
+						select coalesce(lp.display_name, l.lender_name, '—') as from, l.due_on::text
+						from loans l left join profiles lp on lp.user_id = l.lender_id
+						where l.borrower_id = ${userId} and l.status = 'active' and l.work_id = ${r.workId}`)
+				).map((b) => ({ from: b.from, dueOn: b.due_on }))
 			};
 		},
 
@@ -221,6 +242,8 @@ export function createLibrary(deps: { db: Db; catalog: Catalog; accounts: Accoun
 					state: copies.state,
 					createdAt: copies.createdAt,
 					sectionId: copies.sectionId,
+					lentTo: lentToSql,
+					dueOn: dueOnSql,
 					editionId: editions.id,
 					workId: works.id,
 					title: editions.title,
@@ -255,7 +278,7 @@ export function createLibrary(deps: { db: Db; catalog: Catalog; accounts: Accoun
 					};
 					byEdition.set(r.editionId, e);
 				}
-				e.copies.push({ id: r.copyId, state: r.state, createdAt: r.createdAt.toISOString(), sectionId: r.sectionId });
+				e.copies.push(copyOut({ id: r.copyId, state: r.state, createdAt: r.createdAt, sectionId: r.sectionId, lentTo: r.lentTo, dueOn: r.dueOn }));
 			}
 			return [...byEdition.values()];
 		},

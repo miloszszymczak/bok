@@ -6,9 +6,16 @@
 	import TopBar from '#lib/components/TopBar.svelte';
 	import { m } from '#lib/paraglide/messages.js';
 	import { invalidateAll } from '$app/navigation';
+	import AddToList from '#lib/components/AddToList.svelte';
+	import OgMeta from '#lib/components/OgMeta.svelte';
+	import PostCard from '#lib/components/PostCard.svelte';
 	import ReadingPanel from '#lib/components/ReadingPanel.svelte';
 	import SectionPicker from '#lib/components/SectionPicker.svelte';
 	import ShelfSketch from '#lib/components/ShelfSketch.svelte';
+	import LendSheet from '#lib/components/LendSheet.svelte';
+	import LoanCard from '#lib/components/LoanCard.svelte';
+	import BorrowedSheet from '#lib/components/BorrowedSheet.svelte';
+	import { lentLabel, shortDate } from '#lib/utils/loans.ts';
 	import { coverVariants } from '#lib/utils/cover-upload.ts';
 	import { formatLabel, languageName, roleLabel } from '#lib/utils/labels.ts';
 	import type { PageProps } from './$types';
@@ -28,6 +35,21 @@
 		await fetch('/api/v1/copies/move', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ copyIds: [moving], sectionId }) });
 		moving = null;
 		await invalidateAll();
+	}
+	let lending = $state<string | null>(null);
+	let borrowedOpen = $state(false);
+	let asked = $state<Record<string, boolean>>({});
+
+	async function setLendable(copyId: string, lendable: boolean) {
+		await fetch(`/api/v1/copies/${copyId}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ lendable }) });
+	}
+	async function returned(loanId: string) {
+		await fetch(`/api/v1/loans/${loanId}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'returned' }) });
+		await invalidateAll();
+	}
+	async function ask(copyId: string) {
+		const r = await fetch('/api/v1/loans', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'request', copyId }) });
+		if (r.ok || r.status === 409) asked = { ...asked, [copyId]: true };
 	}
 	let coverBusy = $state(false);
 	let coverError = $state(false);
@@ -56,9 +78,8 @@
 
 <svelte:head>
 	<title>{data.work.title}{authorLine ? ` — ${authorLine}` : ''} · bok</title>
-	<meta property="og:title" content={data.work.title} />
-	{#if description}<meta name="description" content={description.slice(0, 200)} />{/if}
 </svelte:head>
+<OgMeta title={authorLine ? `${data.work.title} — ${authorLine}` : data.work.title} description={description ?? ''} image={data.og.image} url={data.og.url} type="book" />
 
 <TopBar title="" back={page.data.profile ? '/library' : '/'}>
 	{#snippet actions()}
@@ -85,7 +106,37 @@
 			<h1 class="font-serif text-2xl leading-tight font-bold">{ed?.title ?? data.work.title}</h1>
 			{#if ed?.subtitle}<p class="mt-1 font-serif text-lg leading-snug text-muted">{ed.subtitle}</p>{/if}
 			{#if authorLine}<p class="mt-2 font-medium">{authorLine}</p>{/if}
-			{#each data.series as sr (sr.id)}
+			{#if data.borrowed.length}
+		<section class="mt-6" data-testid="borrowed-here">
+			<h2 class="section-title">{m.loans_borrowed()}</h2>
+			<div class="space-y-3">{#each data.borrowed as l (l.id)}<LoanCard loan={l} />{/each}</div>
+		</section>
+	{/if}
+
+	{#if page.data.profile && (data.lendable.length || (!data.myCopies.length && !data.borrowed.length))}
+		<section class="mt-6" data-testid="borrow-from">
+			{#if data.lendable.length}
+				<h2 class="section-title">{m.loan_borrow_from()}</h2>
+				<ul class="card divide-y divide-line/60">
+					{#each data.lendable as c (c.copyId)}
+						<li class="flex items-center gap-3 p-3" data-lendable-copy={c.copyId}>
+							<span class="min-w-0 flex-1"><a href="/u/{c.owner.handle}" class="block truncate font-medium">{c.owner.name}</a><span class="block truncate text-xs text-muted">{c.title}{c.available ? '' : ` · ${m.loan_on_loan()}`}</span></span>
+							{#if c.requestedLoanId || asked[c.copyId]}
+								<span class="text-sm text-muted" data-testid="asked">{m.loan_asked()}</span>
+							{:else}
+								<button class="btn btn-secondary h-9 px-3 text-sm" onclick={() => ask(c.copyId)} data-testid="ask-borrow">{m.loan_ask_borrow()}</button>
+							{/if}
+						</li>
+					{/each}
+				</ul>
+			{/if}
+			{#if !data.myCopies.length && !data.borrowed.length}
+				<button class="mt-2 text-sm font-medium text-accent" onclick={() => (borrowedOpen = true)} data-testid="i-borrowed">{m.loan_i_borrowed()}</button>
+			{/if}
+		</section>
+	{/if}
+
+	{#each data.series as sr (sr.id)}
 				{@const me = sr.works.find((w) => w.workId === data.work.id)}
 				<a href="/series/{sr.id}" class="mt-1 block text-sm text-accent" data-testid="series-link">{sr.name}{me?.position ? ` #${me.position}` : ''}</a>
 			{:else}
@@ -124,9 +175,13 @@
 		</section>
 	{/if}
 
+	{#if page.data.profile}
+		<div class="mt-3"><AddToList workId={data.work.id} editionId={ed?.id ?? null} /></div>
+	{/if}
+
 	{#if data.reading}
 		<div class="mt-5">
-			<ReadingPanel title={data.work.title} status={data.reading.status} stuckSource={data.reading.stuckSource} current={data.reading.current} events={data.reading.events} past={data.reading.past} pages={ed?.pageCount ?? null} medianRate={data.medianRate} openFinish={data.openFinish} />
+			<ReadingPanel title={data.work.title} status={data.reading.status} stuckSource={data.reading.stuckSource} current={data.reading.current} events={data.reading.events} past={data.reading.past} pages={ed?.pageCount ?? null} medianRate={data.medianRate} openFinish={data.openFinish} defaultVisibility={data.defaultVisibility} />
 		</div>
 	{/if}
 
@@ -149,10 +204,33 @@
 									<p class="text-sm text-muted">{m.where_unsorted_hint()}</p>
 								{/if}
 								{#if data.editions.length > 1}<p class="mt-1 truncate text-xs text-muted">{editionTitle(c.editionId)?.publisher} {editionTitle(c.editionId)?.publishedYear ?? ''}</p>{/if}
-								{#if c.state === 'lent'}<p class="mt-1 text-xs font-semibold text-warn">{m.where_lent()}</p>{/if}
-								<button class="btn btn-secondary mt-2 h-9 px-3 text-sm" onclick={() => ((moving = c.copyId), (pickerOpen = true))}>{c.place ? m.where_move() : m.where_put()}</button>
+								{#if c.loan}
+									<a href="/loans#loan-{c.loan.id}" class="mt-1 block text-sm font-semibold text-warn" data-testid="copy-lent">{lentLabel(c.loan.other.name, c.loan.dueOn)}</a>
+								{:else if c.state === 'lent'}<p class="mt-1 text-xs font-semibold text-warn">{m.where_lent()}</p>{/if}
+								<div class="mt-2 flex flex-wrap gap-2">
+									<button class="btn btn-secondary h-9 px-3 text-sm" onclick={() => ((moving = c.copyId), (pickerOpen = true))}>{c.place ? m.where_move() : m.where_put()}</button>
+									{#if c.loan}
+										<button class="btn btn-secondary h-9 px-3 text-sm" onclick={() => returned(c.loan!.id)} data-testid="copy-returned">{m.loan_mark_returned()}</button>
+									{:else if c.state !== 'lost'}
+										<button class="btn btn-secondary h-9 px-3 text-sm" onclick={() => (lending = c.copyId)} data-testid="lend">{m.loan_lend()}</button>
+									{/if}
+								</div>
+								<label class="mt-2 flex items-center gap-2 text-sm">
+									<input type="checkbox" class="size-4 rounded border-line text-accent focus:ring-accent" checked={c.lendable} onchange={(e) => setLendable(c.copyId, e.currentTarget.checked)} data-testid="lendable" />
+									{m.loan_lendable()}
+								</label>
 							</div>
 						</div>
+						{#if c.loanHistory.length}
+							<details class="mt-2 border-t border-line/60 pt-2 text-sm" data-testid="copy-history">
+								<summary class="cursor-pointer text-muted">{m.loan_history_copy()}</summary>
+								<ul class="mt-1 space-y-1">
+									{#each c.loanHistory as h (h.id)}
+										<li class="flex justify-between gap-2"><span class="truncate">{#if h.other.handle}<a href="/loans?with={h.other.handle}" class="font-medium">{h.other.name}</a>{:else}{h.other.name}{/if}</span><span class="shrink-0 text-muted">{h.lentOn ? shortDate(h.lentOn) : ''} – {h.returnedOn ? shortDate(h.returnedOn) : ''}</span></li>
+									{/each}
+								</ul>
+							</details>
+						{/if}
 					</div>
 				{/each}
 			</div>
@@ -224,6 +302,13 @@
 		</section>
 	{/if}
 
+	{#if data.mentions.length}
+		<section class="mt-6 space-y-3" data-testid="mentioned-in">
+			<h2 class="section-title">{m.book_mentioned_in()}</h2>
+			{#each data.mentions as post (post.id)}<PostCard {post} signedIn={!!page.data.profile} />{/each}
+		</section>
+	{/if}
+
 	{#if data.editions.length > 1}
 		<section class="mt-6">
 			<h2 class="section-title">{m.book_editions({ count: data.editions.length })}</h2>
@@ -243,3 +328,11 @@
 </main>
 
 <SectionPicker tree={data.tree} bind:open={pickerOpen} title={m.list_move_to()} current={data.myCopies.find((c) => c.copyId === moving)?.place?.sectionId ?? null} allowUnsorted onpick={moveCopy} />
+
+{#if lending}
+	{@const c = data.myCopies.find((x) => x.copyId === lending)}
+	<LendSheet copyId={lending} title={data.work.title + (c && data.editions.length > 1 ? ` · ${editionTitle(c.editionId)?.publisher ?? ''}` : '')} onclose={() => (lending = null)} ondone={() => ((lending = null), invalidateAll())} />
+{/if}
+{#if borrowedOpen}
+	<BorrowedSheet book={{ workId: data.work.id, editionId: ed?.id ?? null, title: data.work.title, authors: data.authors.map((a) => a.name), cover: ed?.cover ?? null }} onclose={() => (borrowedOpen = false)} ondone={() => ((borrowedOpen = false), invalidateAll())} />
+{/if}

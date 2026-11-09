@@ -7,6 +7,7 @@ export interface ServerConfig {
 	googleBooksApiKey?: string;
 	isbndbApiKey?: string;
 	origin: string;
+	vapid?: { publicKey: string; privateKey: string; subject: string };
 }
 
 const req = (env: Record<string, string | undefined>, k: string) => {
@@ -31,6 +32,7 @@ export function configFromEnv(env: Record<string, string | undefined> = process.
 		resend: { apiKey: env.RESEND_API_KEY ?? '', from: env.EMAIL_FROM ?? 'bok <noreply@bok.mwsz.org>' },
 		googleBooksApiKey: env.GOOGLE_BOOKS_API_KEY || undefined,
 		isbndbApiKey: env.ISBNDB_API_KEY || undefined,
-		origin: req(env, 'ORIGIN')
+		origin: req(env, 'ORIGIN'),
+		vapid: env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY ? { publicKey: env.VAPID_PUBLIC_KEY, privateKey: env.VAPID_PRIVATE_KEY, subject: env.VAPID_SUBJECT || env.ORIGIN || 'https://bok.mwsz.org' } : undefined
 	};
 }

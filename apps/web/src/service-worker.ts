@@ -53,13 +53,16 @@ self.addEventListener('fetch', (event) => {
 
 	// Hashed build output never changes: cache-first, and cache anything not precached on first
 	// use (e.g. the decoder's WASM, which the manifest doesn't list) so scanning works offline.
-	if (PRECACHE.includes(url.pathname) || url.pathname.startsWith('/_app/immutable/')) {
+	// Fonts too (hashed in builds; dev serves them from node_modules paths): the UI must not
+	// fall back to system fonts, or fail to load them, when offline.
+	const font = req.destination === 'font' || /\.woff2?$/.test(url.pathname);
+	if (PRECACHE.includes(url.pathname) || url.pathname.startsWith('/_app/immutable/') || font) {
 		event.respondWith(
 			caches.match(req).then(
 				(hit) =>
 					hit ??
 					fetch(req).then(async (res) => {
-						if (res.ok && url.pathname.startsWith('/_app/immutable/')) await (await caches.open(SHELL)).put(req, res.clone());
+						if (res.ok && (url.pathname.startsWith('/_app/immutable/') || font)) await (await caches.open(SHELL)).put(req, res.clone());
 						return res;
 					})
 			)
@@ -111,4 +114,35 @@ self.addEventListener('fetch', (event) => {
 				.catch(async () => (cacheable ? await caches.match(url.pathname) : undefined) ?? (await caches.match('/offline')) ?? Response.error())
 		);
 	}
+});
+
+// ── Web push ──
+self.addEventListener('push', (event) => {
+	let data: { title?: string; body?: string; url?: string; tag?: string } = {};
+	try {
+		data = event.data?.json() ?? {};
+	} catch {
+		data = { body: event.data?.text() };
+	}
+	event.waitUntil(
+		self.registration.showNotification(data.title ?? 'bok', {
+			body: data.body,
+			tag: data.tag,
+			icon: '/icons/icon-192.png',
+			badge: '/icons/icon-192.png',
+			data: { url: data.url ?? '/notifications' }
+		})
+	);
+});
+
+self.addEventListener('notificationclick', (event) => {
+	event.notification.close();
+	const url = new URL((event.notification.data as { url?: string })?.url ?? '/notifications', self.location.origin).href;
+	event.waitUntil(
+		self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((wins) => {
+			const open = wins.find((w) => new URL(w.url).origin === self.location.origin);
+			if (open) return open.focus().then((w) => w?.navigate(url));
+			return self.clients.openWindow(url);
+		})
+	);
 });

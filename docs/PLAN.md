@@ -283,7 +283,9 @@ Built as planned. Choices made: one-tap "Read"/"Didn't finish" from a book card 
 - A finished read with no date appears under "Past"; one with only a month appears in that month.
 - The reading-time estimate equals the days between the first *started* and the *finished* event, and an override replaces it everywhere.
 
-### Phase 5 — Profiles & social graph  ·  M
+### Phase 5 — Profiles & social graph  ·  M  ·  ✅ done (2026-11-08)
+
+Built as planned. Choices made: **friends also count as followers** for "followers"-visibility content; follow, friendship and blocking are independent (a mutual friend request auto-accepts); live updates use **Postgres LISTEN/NOTIFY → SSE** (no Valkey pub/sub, so no extra ACL); push and email are sent from the process that creates the notification; quiet hours suppress push only (the inbox still updates). Moderation: reports on profiles → admin queue (dismiss / hide profile / suspend = hidden + signed out + can't sign in), closing all open reports about that account. Per-section privacy: library, lending (used in phase 8) and the default visibility of new log entries; shelf locations are never public. Not verified: push on a real phone (the automated test delivers a VAPID-signed, encrypted push to a local fake push service in ~0.2 s).
 
 **Scope**
 - Profile: avatar (crop on the device → R2), unique handle, display name, bio, timezone. Tabs: Log · Posts (phase 7) · Readlists (phase 6) · Library · Stats.
@@ -298,7 +300,9 @@ Built as planned. Choices made: one-tap "Read"/"Didn't finish" from a book card 
 - Visibility test matrix passes: {public, followers, friends, private} × {stranger, follower, friend, friend+follower, blocked, self} for the log and library.
 - A friend request reaches the recipient's phone by push within 5 s.
 
-### Phase 6 — Readlists, public links & link previews  ·  S–M
+### Phase 6 — Readlists, public links & link previews  ·  S–M  ·  ✅ done (2026-11-08)
+
+Built as planned. Measured: Lighthouse mobile on a public list (production build) — performance 100, accessibility 100, best practices 100, SEO 100 (LCP 0.8 s, CLS 0). Link previews: verified the tags Messenger, WhatsApp, iMessage, Slack and Discord read (fetched with their user agents) and the 1200×630 PNG; not checked inside the real apps. Choices made: preview images are rendered on demand (satori → resvg, in the owner's language) and cached in R2 under a content hash, and are pre-rendered when the page is fetched so the bot's image request is instant; unlisted lists are `noindex`; making a saved list private removes it from other people's Saved lists; a "your list was saved" notification (in-app only by default). Profile and book pages got previews too; post previews come with phase 7.
 
 **Scope**
 - Create, edit and delete readlists; add from any book card ("Add to list…"); drag to reorder (fractional indexes — no renumbering); a note per item.
@@ -311,7 +315,9 @@ Built as planned. Choices made: one-tap "Read"/"Didn't finish" from a book card 
 - A list link pasted into Messenger, WhatsApp, iMessage, Slack or Discord shows a correct preview card.
 - The public page scores ≥ 95 on Lighthouse mobile performance.
 
-### Phase 7 — Microblog, book references & home feed  ·  M
+### Phase 7 — Microblog, book references & home feed  ·  M  ·  ✅ done (2026-11-08)
+
+Built as planned, plus the tag page (`/t/{tag}`, deferred from phase 4) and link previews for public posts. Choices made: posts are stored in a small text format (see `@bok/core` post.ts) and rendered from a parsed tree — never as HTML; in the editor a book shows as `$[Title]` and maps back to its id on save, so chips survive edits; mentions only notify people who can see the post (and only once, not again on edits); comments inherit the post's visibility and are hidden between blocked users; the post's author can delete any comment on it; whole-post spoilers are collapsed in feeds and previews say "contains spoilers"; previews use the author's language. Feed = posts + finished reads (with review, spoiler-aware) + new public lists from people I follow, friends and me, keyset-paginated (infinite scroll + pull to refresh). Not done: the optional "someone mentioned a book you're reading" notification; images in posts.
 
 **Scope**
 - Posts: markdown-lite (bold, italics, links, line breaks), 2,000 characters, visibility public/followers/friends/private, edit (marked "edited") and delete.
@@ -327,7 +333,9 @@ Built as planned. Choices made: one-tap "Read"/"Didn't finish" from a book card 
 - A friends-only post is visible to a friend who doesn't follow the author, but not to a follower who isn't a friend.
 - Book chips survive edits and link correctly; spoilers are hidden in feeds and link previews.
 
-### Phase 8 — Lending & borrowing  ·  M
+### Phase 8 — Lending & borrowing  ·  M  ·  ✅ done (2026-11-08)
+
+Built as planned. Choices made: one `loans` row per loan, each side either a user or just a name (at least one side is a user); a copy can be on only one active loan (unique index); lending to a user notifies them, lending to a name keeps reminders with the lender only through "overdue". The borrower's "I've given it back" waits for the lender to confirm; the lender's own "Returned" (or any return to a lender outside the app) closes the loan. Extensions: the borrower asks, the lender agrees or declines; the lender, or a borrower whose lender is outside the app, just changes the date. Borrow requests need the copy marked lendable and the owner's lending visibility (default friends) to include you; approving sets the due date (2 weeks / 1 month / date / none). Reminders: an **hourly** worker job sends them from **9:00 in each recipient's timezone** — borrower 7/3/1 days before and on the due day, both sides on overdue day 1 and then weekly; the notification dedupe key (loan, kind, due date, day, side) makes them exactly-once across replicas and restarts, and a new due date restarts the schedule. Blocking cancels pending requests; active loans stay on record (either side can still mark them returned) but further requests, approvals and extensions between the pair are refused and their notifications suppressed. Entry points: Library → ⇄ (`/loans`), the copy card on the book page (Lend / Returned / lendable / history), "Borrow from" on the book page, the profile "Lending" tab, `/loans?with=handle` for history per person. Bookstore mode shows "Lent to … until …" (also offline, from the cached library) and "Borrowed from …" (online). Not done: offline cache of books *borrowed* (only owned copies are cached); a loan's lender changing their mind about the copy after approving (they can mark it returned).
 
 **Scope**
 - **Lend** from a copy: borrower = a user (friends first) or just a name; due date (2 weeks / 1 month / custom); note.
@@ -342,7 +350,9 @@ Built as planned. Choices made: one-tap "Read"/"Didn't finish" from a book card 
 - With a clock simulation, exactly one notification per reminder day is sent per loan (no duplicates across worker replicas or restarts).
 - Blocking a user cancels pending requests and stops lending interactions.
 
-### Phase 9 — Import/export & stats  ·  M
+### Phase 9 — Import/export & stats  ·  M  ·  ✅ done (2026-11-08)
+
+Built as planned. Choices made: the uploaded CSV is parsed at upload and kept only as rows in the database (no file in R2; the rows' raw data is purged 30 days later by the daily `import-purge` job); upload → preview (detected source and rating scale, counts, sample, options: scale, shelves → tags / private lists / ignore, visibility, owned → Unsorted) → confirm → the `import-run` worker job matches in parallel (12 lookups at a time) and applies rows in file order, checkpointing each row, with progress polled by the page and an `import_done` notification. Matching: ISBN → our catalogue / providers; ISBN unknown everywhere → a new record from the file's data (so it counts as matched); no ISBN → exact title (without Goodreads' "(Series, #n)" and the subtitle) + author, else trigram candidates for the user to confirm ("which book is it?"), else a new record. Imported reads have no feed time, so they never flood friends' feeds; statuses never overwrite what you already have; re-importing the same file adds nothing. lubimyczytac: Polish headers and shelf names are recognised and ratings above 5 (or a lubimyczytac source) mean the 1–10 scale — **the column names of the community exporters were not checked against a real file** (none was available); please send a sample if one doesn't import. Export: Goodreads-compatible CSV (ratings rounded to whole stars) and the full JSON, both generated on request. Stats on `/u/{handle}/stats` (respecting read visibility), year in review on `/u/{handle}/year/{year}` (stories-style slides, reduced-motion aware) with a share card from public reads only; a home banner offers it 15 Dec – 31 Jan. Measured: 1,200 rows with simulated 150 ms provider lookups import in ~26 s, ≥ 95 % automatic (DB test); with real providers expect it to be bounded by them — and note Google Books' default 1,000 requests/day quota. Also fixed: link-preview images didn't render ą ę ł ń ś ź ż (satori only falls back between differently named fonts); all cached previews are re-rendered once (`og-version.ts` RENDERER). BODY_SIZE_LIMIT raised to 16M for uploads.
 
 **Scope**
 - **Goodreads CSV import:** upload → preview → confirm. Mapping:

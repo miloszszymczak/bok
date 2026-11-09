@@ -280,7 +280,8 @@
 				copies: r.copies,
 				sameWorkOtherEditions: r.sameWorkOtherEditions,
 				notFound: r.status !== 'found',
-				reading: r.reading ?? verdict.reading
+				reading: r.reading ?? verdict.reading,
+				borrowed: r.borrowed ?? []
 			};
 		} catch {
 			if (verdict?.code === code) verdict = { ...verdict, loading: false, offline: true };

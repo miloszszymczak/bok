@@ -19,14 +19,15 @@
 
 <svelte:head><title>{data.work.title} · {m.log_title()} · bok</title></svelte:head>
 
-<TopBar title={data.work.title} back="/log">
+<TopBar title={data.work.title} back={data.mine ? '/log' : `/u/${data.owner?.handle}`}>
 	{#snippet actions()}
-		<button class="btn btn-ghost h-10 px-3 text-sm" onclick={() => (editing = true)} data-testid="edit-read">{m.book_edit()}</button>
+		{#if data.mine}<button class="btn btn-ghost h-10 px-3 text-sm" onclick={() => (editing = true)} data-testid="edit-read">{m.book_edit()}</button>{/if}
 	{/snippet}
 </TopBar>
 <main class="page space-y-4">
 	{#if form?.saved}<p class="rounded-xl bg-accent-soft px-4 py-2 text-sm" role="status">{m.common_saved()}</p>{/if}
 	<section class="card space-y-3 p-4">
+		{#if !data.mine && data.owner}<p class="text-sm text-muted"><a href="/u/{data.owner.handle}" class="font-semibold text-ink">{data.owner.displayName}</a> · @{data.owner.handle}</p>{/if}
 		<a href="/book/{data.work.id}" class="font-serif text-xl font-bold text-accent">{data.work.title}</a>
 		<p class="text-sm" data-testid="read-when">{r.outcome === 'dnf' ? `${statusLabel('dnf')} · ` : ''}{finishedLabel(r.finishedOn, r.finishedPrecision)}</p>
 		{#if r.rating !== null}<p class="flex items-center gap-2"><RatingStars value={r.rating} size={20} /><span class="text-sm text-muted">{r.rating}/10</span></p>{/if}
@@ -42,7 +43,7 @@
 				<p class="leading-relaxed whitespace-pre-line">{r.review}</p>
 			{/if}
 		{/if}
-		<p class="text-xs text-muted">{m.finish_visibility()}: {r.visibility === 'public' ? m.visibility_public() : r.visibility === 'followers' ? m.visibility_followers() : r.visibility === 'friends' ? m.visibility_friends() : m.visibility_private()}</p>
+		<p class="text-xs text-muted {data.mine ? '' : 'hidden'}">{m.finish_visibility()}: {r.visibility === 'public' ? m.visibility_public() : r.visibility === 'followers' ? m.visibility_followers() : r.visibility === 'friends' ? m.visibility_friends() : m.visibility_private()}</p>
 	</section>
 
 	{#if data.events.length}

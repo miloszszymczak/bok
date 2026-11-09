@@ -4,7 +4,8 @@
 	import { m } from '#lib/paraglide/messages.js';
 	import RatingStars from './RatingStars.svelte';
 	import { statusLabel } from '#lib/utils/reading.ts';
-	import type { BookSummary, OwnedCopy, ReadingSummary } from '#lib/client/types.ts';
+	import type { BookSummary, BorrowedSummary, OwnedCopy, ReadingSummary } from '#lib/client/types.ts';
+	import { lentLabel, shortDate } from '#lib/utils/loans.ts';
 
 	export interface VerdictState {
 		code: string;
@@ -17,12 +18,14 @@
 		cachedCount: number;
 		ms?: number;
 		reading?: ReadingSummary | null;
+		borrowed?: BorrowedSummary[];
 	}
 
 	let { v, onadd, adding = false }: { v: VerdictState; onadd: () => void; adding?: boolean } = $props();
 
 	const owned = $derived(v.copies.length > 0);
-	const lent = $derived(v.copies.filter((c) => c.state === 'lent').length);
+	const lentCopies = $derived(v.copies.filter((c) => c.state === 'lent'));
+	const lent = $derived(lentCopies.length);
 	const tone = $derived(owned ? 'bg-accent text-accent-ink' : v.sameWorkOtherEditions ? 'bg-warn text-white' : 'bg-surface border border-line');
 </script>
 
@@ -43,7 +46,14 @@
 			{/if}
 		</p>
 	</div>
-	{#if lent}<p class="px-4 pb-2 text-sm font-medium">{m.verdict_lent({ count: lent })}</p>{/if}
+	{#if lent}
+		<p class="px-4 pb-2 text-sm font-medium" data-testid="verdict-lent">
+			{#if lentCopies.every((c) => c.lentTo)}{lentCopies.map((c) => lentLabel(c.lentTo!, c.dueOn ?? null)).join(' · ')}{:else}{m.verdict_lent({ count: lent })}{/if}
+		</p>
+	{/if}
+	{#each v.borrowed ?? [] as b, i (i)}
+		<p class="px-4 pb-2 text-sm font-medium" data-testid="verdict-borrowed">{b.dueOn ? m.verdict_borrowed_until({ name: b.from, date: shortDate(b.dueOn) }) : m.verdict_borrowed({ name: b.from })}</p>
+	{/each}
 	{#if v.reading && (v.reading.status || v.reading.timesRead)}
 		<p class="flex flex-wrap items-center gap-2 px-4 pb-3 text-sm font-medium" data-testid="verdict-reading">
 			{#if v.reading.timesRead}

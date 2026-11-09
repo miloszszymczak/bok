@@ -1,6 +1,7 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { getAuth, googleEnabled } from '#lib/server/auth.ts';
 import { authErrorMessage, safeNext } from '#lib/server/auth-helpers.ts';
+import { m } from '#lib/paraglide/messages.js';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
@@ -13,10 +14,16 @@ export const actions: Actions = {
 		const f = await request.formData();
 		const email = String(f.get('email') ?? '').trim();
 		const password = String(f.get('password') ?? '');
+		let userId: string;
 		try {
-			await getAuth(locals.svc).api.signInEmail({ body: { email, password, rememberMe: true }, headers: request.headers });
+			const r = await getAuth(locals.svc).api.signInEmail({ body: { email, password, rememberMe: true }, headers: request.headers });
+			userId = r.user.id;
 		} catch (e) {
 			return fail(400, { mode: 'password', email, error: authErrorMessage(e) });
+		}
+		if (await locals.svc.social.isSuspended(userId)) {
+			await getAuth(locals.svc).api.signOut({ headers: request.headers }).catch(() => {});
+			return fail(403, { mode: 'password', email, error: m.auth_err_suspended() });
 		}
 		redirect(303, safeNext(url.searchParams.get('next')));
 	},

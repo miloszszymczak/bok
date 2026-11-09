@@ -15,7 +15,14 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const { shelves } = locals.svc;
 	const memberships = await shelves.memberships(locals.user!.id);
 	const active = memberships.find((m) => m.isDefault) ?? memberships[0]!;
+	const { notifications, social } = locals.svc;
+	const [prefs, blocked] = await Promise.all([notifications.prefs(locals.user!.id), social.blocked(locals.user!.id)]);
 	return {
+		prefs,
+		blocked,
+		pushEnabled: notifications.pushEnabled,
+		privacy: { libraryVisibility: p.libraryVisibility, lendingVisibility: p.lendingVisibility, logVisibility: p.logVisibility },
+		quiet: { from: p.quietFrom, to: p.quietTo },
 		households: memberships.map((m) => ({ id: m.householdId, name: m.name, active: m.householdId === active.householdId })),
 		members: await shelves.members(active.householdId),
 		form: { displayName: p.displayName, handle: p.handle, bio: p.bio, timezone: p.timezone, locale: p.locale },
@@ -41,6 +48,7 @@ export const actions: Actions = {
 		if (taken) return fail(400, { section: 'profile', values, error: m.settings_err_handle_taken() });
 		await db.update(profiles).set(values).where(eq(profiles.userId, locals.user!.id));
 		await db.update(user).set({ name: displayName }).where(eq(user.id, locals.user!.id));
+		await locals.svc.social.refreshSearchName(locals.user!.id);
 		return { section: 'profile', saved: true };
 	},
 	preferences: async ({ request, locals, cookies }) => {
@@ -55,6 +63,39 @@ export const actions: Actions = {
 			cookies.set('theme', theme, { path: '/', maxAge: 60 * 60 * 24 * 400, httpOnly: false, sameSite: 'lax' });
 		}
 		redirect(303, '/settings');
+	},
+	notifications: async ({ request, locals }) => {
+		const f = await request.formData();
+		const types = (await locals.svc.notifications.prefs(locals.user!.id)).map((p) => p.type);
+		await locals.svc.notifications.setPrefs(
+			locals.user!.id,
+			types.map((type) => ({ type, inapp: !!f.get(`${type}.inapp`), push: !!f.get(`${type}.push`), email: !!f.get(`${type}.email`) }))
+		);
+		const hour = (k: string) => {
+			const v = String(f.get(k) ?? '');
+			const n = Number(v);
+			return v !== '' && Number.isInteger(n) && n >= 0 && n <= 23 ? n : null;
+		};
+		await locals.svc.db.update(profiles).set({ quietFrom: hour('quietFrom'), quietTo: hour('quietTo') }).where(eq(profiles.userId, locals.user!.id));
+		return { section: 'notifications', saved: true };
+	},
+	privacy: async ({ request, locals }) => {
+		const f = await request.formData();
+		const vis = (k: string) => {
+			const v = String(f.get(k) ?? '');
+			return (['public', 'followers', 'friends', 'private'] as const).find((x) => x === v);
+		};
+		const libraryVisibility = vis('libraryVisibility');
+		const lendingVisibility = vis('lendingVisibility');
+		const logVisibility = vis('logVisibility');
+		if (!libraryVisibility || !lendingVisibility || !logVisibility) return fail(400, { section: 'privacy', error: m.error_generic() });
+		await locals.svc.db.update(profiles).set({ libraryVisibility, lendingVisibility, logVisibility }).where(eq(profiles.userId, locals.user!.id));
+		return { section: 'privacy', saved: true };
+	},
+	unblock: async ({ request, locals }) => {
+		const id = String((await request.formData()).get('userId') ?? '');
+		await locals.svc.social.unblock(locals.user!.id, id);
+		return { section: 'privacy' };
 	},
 	invite: async ({ locals, url }) => {
 		const token = await locals.svc.shelves.createInvite(locals.user!.id);

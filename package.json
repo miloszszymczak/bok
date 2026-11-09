@@ -1,6 +1,6 @@
 {
 	"name": "bok",
-	"version": "0.1.2",
+	"version": "0.2.0",
 	"private": true,
 	"type": "module",
 	"workspaces": [
@@ -21,10 +21,12 @@
 		"db:migrate": "npm run migrate -w @bok/db",
 		"release": "./scripts/release.sh",
 		"test:db": "TEST_DATABASE_URL=postgres://bok:bok@localhost:5432/bok_test vitest run --no-file-parallelism packages/server",
-		"test:e2e": "node apps/web/e2e/scan.e2e.mjs && ENGINE=zxing node apps/web/e2e/scan.e2e.mjs && node apps/web/e2e/manual.e2e.mjs && node apps/web/e2e/shelves.e2e.mjs && node apps/web/e2e/reading.e2e.mjs"
+		"test:coverage": "TEST_DATABASE_URL=postgres://bok:bok@localhost:5432/bok_test vitest run --no-file-parallelism --coverage --coverage.include='packages/*/src/**' packages",
+		"test:e2e": "node apps/web/e2e/scan.e2e.mjs && ENGINE=zxing node apps/web/e2e/scan.e2e.mjs && node apps/web/e2e/manual.e2e.mjs && node apps/web/e2e/shelves.e2e.mjs && node apps/web/e2e/reading.e2e.mjs && node apps/web/e2e/social.e2e.mjs && node apps/web/e2e/readlists.e2e.mjs && node apps/web/e2e/posts.e2e.mjs && node apps/web/e2e/loans.e2e.mjs && node apps/web/e2e/import.e2e.mjs"
 	},
 	"devDependencies": {
 		"@types/node": "^24",
+		"@vitest/coverage-v8": "^4.1.12",
 		"playwright-core": "^1.65.0",
 		"typescript": "^6.0.3",
 		"vitest": "^4.1.8"
