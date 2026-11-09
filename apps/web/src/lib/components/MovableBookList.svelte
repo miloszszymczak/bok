@@ -4,6 +4,7 @@
 	import Icon from './Icon.svelte';
 	import SectionPicker, { type PickerTree } from './SectionPicker.svelte';
 	import { m } from '#lib/paraglide/messages.js';
+	import { lentLabel } from '#lib/utils/loans.ts';
 
 	interface Book {
 		copyId: string;
@@ -13,6 +14,8 @@
 		authors: string[];
 		year: number | null;
 		cover: string | null;
+		lentTo?: string | null;
+		dueOn?: string | null;
 	}
 
 	let { books, tree, current = null }: { books: Book[]; tree: PickerTree; current?: string | null } = $props();
@@ -68,7 +71,7 @@
 				{:else}
 					<a href="/book/{b.workId}?e={b.editionId}" class="flex items-center gap-3 rounded-xl p-2" data-copy={b.copyId}>
 						<BookCover src={b.cover} title={b.title} author={b.authors[0]} width={40} />
-						<span class="min-w-0 flex-1"><span class="line-clamp-2 font-medium">{b.title}</span><span class="block truncate text-xs text-muted">{[b.authors.join(', '), b.year].filter(Boolean).join(' · ')}</span></span>
+						<span class="min-w-0 flex-1"><span class="line-clamp-2 font-medium">{b.title}</span><span class="block truncate text-xs text-muted">{[b.authors.join(', '), b.year].filter(Boolean).join(' · ')}</span>{#if b.lentTo}<span class="block truncate text-xs font-semibold text-warn" data-testid="lent-label">{lentLabel(b.lentTo, b.dueOn ?? null)}</span>{/if}</span>
 					</a>
 				{/if}
 			</li>

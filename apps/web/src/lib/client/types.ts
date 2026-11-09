@@ -16,6 +16,13 @@ export interface OwnedCopy {
 	state: 'shelved' | 'lent' | 'lost';
 	createdAt: string;
 	sectionId: string | null;
+	lentTo?: string | null;
+	dueOn?: string | null;
+}
+
+export interface BorrowedSummary {
+	from: string;
+	dueOn: string | null;
 }
 
 export type ScanResult =
@@ -48,6 +55,7 @@ export interface CheckResult {
 	copies: OwnedCopy[];
 	sameWorkOtherEditions: number;
 	reading?: ReadingSummary;
+	borrowed?: BorrowedSummary[];
 }
 
 export type ScanStatus =

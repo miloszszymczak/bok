@@ -7,10 +7,49 @@
 	import { m } from '#lib/paraglide/messages.js';
 	import { getLocale } from '#lib/paraglide/runtime.js';
 	import { resizeToWebp } from '#lib/utils/image.ts';
+	import { onMount } from 'svelte';
+	import { currentSubscription, disablePush, enablePush, isIos, isStandalone, pushSupported } from '#lib/client/push.ts';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
 	const v = $derived(form && 'values' in form && form.values ? form.values : data.form);
+	let pushState = $state<'unsupported' | 'ios-install' | 'off' | 'on' | 'denied' | 'busy'>('off');
+	onMount(async () => {
+		if (!pushSupported() || !page.data.vapidKey) pushState = isIos() && !isStandalone() ? 'ios-install' : 'unsupported';
+		else if (Notification.permission === 'denied') pushState = 'denied';
+		else pushState = (await currentSubscription()) ? 'on' : 'off';
+	});
+	async function togglePush() {
+		const was = pushState;
+		pushState = 'busy';
+		if (was === 'on') {
+			await disablePush();
+			pushState = 'off';
+		} else {
+			const r = await enablePush(page.data.vapidKey!);
+			pushState = r.ok ? 'on' : r.reason === 'denied' ? 'denied' : 'off';
+		}
+	}
+	const typeLabel = (t: string) => (t === 'follow' ? m.notif_type_follow() : t === 'friend_request' ? m.notif_type_friend_request() : t === 'friend_accept' ? m.notif_type_friend_accept() : t === 'readlist_saved' ? m.notif_type_readlist_saved() : t === 'comment' ? m.notif_type_comment() : t === 'like' ? m.notif_type_like() : t === 'mention' ? m.notif_type_mention() : loanTypeLabel(t));
+	const loanTypeLabel = (t: string) =>
+		({
+			loan_request: m.notif_type_loan_request(),
+			loan_approved: m.notif_type_loan_approved(),
+			loan_declined: m.notif_type_loan_declined(),
+			loan_lent: m.notif_type_loan_lent(),
+			loan_extension_request: m.notif_type_loan_extension_request(),
+			loan_extension_answer: m.notif_type_loan_extension_answer(),
+			loan_returned: m.notif_type_loan_returned(),
+			loan_due: m.notif_type_loan_due(),
+			loan_overdue: m.notif_type_loan_overdue(),
+			import_done: m.notif_type_import_done()
+		})[t] ?? t;
+	const visOptions = [
+		['public', m.visibility_public()],
+		['followers', m.visibility_followers()],
+		['friends', m.visibility_friends()],
+		['private', m.visibility_private()]
+	] as const;
 	let uploading = $state(false);
 	let avatarError = $state('');
 	const deletionDate = $derived(
@@ -86,6 +125,82 @@
 		</div>
 	</section>
 
+	<section id="notifications">
+		<h2 class="section-title">{m.notifications_title()}</h2>
+		<div class="card space-y-4 p-4">
+			<div class="flex items-center gap-3">
+				<div class="flex-1 text-sm">
+					<p class="font-medium">{m.push_this_device()}</p>
+					<p class="text-xs text-muted" data-testid="push-state">
+						{pushState === 'on' ? m.push_on() : pushState === 'denied' ? m.push_denied() : pushState === 'ios-install' ? m.push_ios_install() : pushState === 'unsupported' ? m.push_unsupported() : m.push_off()}
+					</p>
+				</div>
+				{#if pushState === 'on' || pushState === 'off' || pushState === 'busy'}
+					<button class="btn h-9 px-3 text-sm {pushState === 'on' ? 'btn-secondary' : 'btn-primary'}" onclick={togglePush} disabled={pushState === 'busy'}>{pushState === 'on' ? m.push_disable() : m.push_enable()}</button>
+				{/if}
+			</div>
+			<form method="POST" action="?/notifications" use:enhance={() => async ({ update }) => update({ reset: false })} class="space-y-4">
+				<table class="w-full text-sm">
+					<thead><tr class="text-xs text-muted"><th class="text-left font-medium"></th><th class="w-14 font-medium">{m.channel_inapp()}</th><th class="w-14 font-medium">{m.channel_push()}</th><th class="w-14 font-medium">{m.channel_email()}</th></tr></thead>
+					<tbody>
+						{#each data.prefs as p (p.type)}
+							<tr class="border-t border-line/60">
+								<td class="py-2.5">{typeLabel(p.type)}</td>
+								{#each ['inapp', 'push', 'email'] as c (c)}
+									<td class="text-center"><input type="checkbox" name="{p.type}.{c}" checked={p[c as 'inapp' | 'push' | 'email']} class="size-5 rounded border-line text-accent focus:ring-accent" aria-label="{typeLabel(p.type)} — {c}" /></td>
+								{/each}
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+				<div>
+					<p class="label">{m.quiet_hours()}</p>
+					<div class="flex items-center gap-2 text-sm">
+						<select class="input h-10 w-24" name="quietFrom" value={data.quiet.from ?? ''} aria-label={m.quiet_from()}>
+							<option value="">—</option>{#each Array.from({ length: 24 }, (_, i) => i) as h (h)}<option value={h}>{String(h).padStart(2, '0')}:00</option>{/each}
+						</select>
+						<span class="text-muted">–</span>
+						<select class="input h-10 w-24" name="quietTo" value={data.quiet.to ?? ''} aria-label={m.quiet_to()}>
+							<option value="">—</option>{#each Array.from({ length: 24 }, (_, i) => i) as h (h)}<option value={h}>{String(h).padStart(2, '0')}:00</option>{/each}
+						</select>
+					</div>
+					<p class="mt-1.5 text-xs text-muted">{m.quiet_hint()}</p>
+				</div>
+				{#if form?.section === 'notifications' && 'saved' in form}<p class="text-sm text-accent" role="status">{m.common_saved()}</p>{/if}
+				<button class="btn btn-secondary w-full">{m.common_save()}</button>
+			</form>
+		</div>
+	</section>
+
+	<section id="privacy">
+		<h2 class="section-title">{m.privacy_title()}</h2>
+		<form method="POST" action="?/privacy" use:enhance={() => async ({ update }) => update({ reset: false })} class="card space-y-4 p-4">
+			{#each [['libraryVisibility', m.privacy_library()], ['lendingVisibility', m.privacy_lending()], ['logVisibility', m.privacy_log_default()]] as [name, label] (name)}
+				<div>
+					<label class="label" for={name}>{label}</label>
+					<select class="input" id={name} {name} value={data.privacy[name as keyof typeof data.privacy]}>
+						{#each visOptions as [v, l] (v)}<option value={v}>{l}</option>{/each}
+					</select>
+				</div>
+			{/each}
+			<p class="text-xs text-muted">{m.privacy_note()}</p>
+			{#if form?.section === 'privacy' && 'saved' in form}<p class="text-sm text-accent" role="status">{m.common_saved()}</p>{/if}
+			<button class="btn btn-secondary w-full">{m.common_save()}</button>
+		</form>
+		{#if data.blocked.length}
+			<div class="card mt-3 divide-y divide-line/60">
+				<p class="px-4 py-2.5 text-sm font-medium">{m.privacy_blocked()}</p>
+				{#each data.blocked as b (b.userId)}
+					<form method="POST" action="?/unblock" use:enhance class="flex items-center gap-2 px-4 py-2.5 text-sm">
+						<input type="hidden" name="userId" value={b.userId} />
+						<span class="flex-1">{b.displayName} <span class="text-muted">@{b.handle}</span></span>
+						<button class="btn btn-ghost h-8 px-2 text-xs">{m.social_unblock()}</button>
+					</form>
+				{/each}
+			</div>
+		{/if}
+	</section>
+
 	<section id="household">
 		<h2 class="section-title">{m.household_title()}</h2>
 		<div class="card space-y-4 p-4">
@@ -159,12 +274,23 @@
 		</form>
 	</section>
 
+	<section id="data">
+		<h2 class="section-title">{m.settings_data()}</h2>
+		<div class="card divide-y divide-line/60">
+			<a href="/import" class="flex items-center justify-between px-4 py-3 text-sm font-medium" data-testid="import-link">{m.settings_import()}<Icon name="forward" size={18} /></a>
+			<a href="/api/v1/export/goodreads.csv" download class="flex items-center justify-between px-4 py-3 text-sm font-medium" data-testid="export-csv">{m.settings_export_csv()}<Icon name="download" size={18} /></a>
+			<a href="/api/v1/export/data.json" download class="flex items-center justify-between px-4 py-3 text-sm font-medium" data-testid="export-json">{m.settings_export_json()}<Icon name="download" size={18} /></a>
+		</div>
+		<p class="mt-2 px-1 text-xs text-muted">{m.settings_export_note()}</p>
+	</section>
+
 	<section>
 		<h2 class="section-title">{m.settings_account()}</h2>
 		<div class="card divide-y divide-line/60">
 			<p class="px-4 py-3 text-sm"><span class="text-muted">{m.auth_email()}:</span> {data.email}</p>
 			{#if page.data.profile?.isAdmin}
 				<a href="/admin/lookup" class="flex items-center justify-between px-4 py-3 text-sm font-medium">{m.admin_lookup_title()}<Icon name="forward" size={18} /></a>
+				<a href="/admin/reports" class="flex items-center justify-between px-4 py-3 text-sm font-medium">{m.admin_reports_title()}<Icon name="forward" size={18} /></a>
 			{/if}
 			<a href="/privacy" class="flex items-center justify-between px-4 py-3 text-sm">{m.legal_privacy()}<Icon name="forward" size={18} /></a>
 			<form method="POST" action="/auth/sign-out">

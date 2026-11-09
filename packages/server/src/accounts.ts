@@ -1,6 +1,7 @@
-import { slugify } from '@bok/core';
+import { foldText, slugify } from '@bok/core';
 import { householdMembers, households, profiles, session, user, type Db } from '@bok/db';
 import type { Kv } from './valkey.ts';
+import type { Storage } from './storage.ts';
 import { and, eq, isNotNull, lt, sql } from 'drizzle-orm';
 
 export const DELETION_GRACE_DAYS = 14;
@@ -11,7 +12,7 @@ export function isHandleAvailableSyntax(h: string) {
 	return HANDLE_RE.test(h) && !RESERVED.has(h);
 }
 
-export function createAccounts(db: Db, kv: Kv, opts: { adminEmails: string[] }) {
+export function createAccounts(db: Db, kv: Kv, opts: { adminEmails: string[]; storage?: Storage }) {
 	const admins = new Set(opts.adminEmails.map((e) => e.trim().toLowerCase()).filter(Boolean));
 
 	async function uniqueHandle(seed: string): Promise<string> {
@@ -35,6 +36,7 @@ export function createAccounts(db: Db, kv: Kv, opts: { adminEmails: string[] }) 
 						userId: u.id,
 						handle,
 						displayName: u.name || handle,
+						searchName: foldText(`${u.name || handle} ${handle}`),
 						locale,
 						role: admins.has(u.email.toLowerCase()) ? 'admin' : 'user'
 					})
@@ -82,7 +84,19 @@ export function createAccounts(db: Db, kv: Kv, opts: { adminEmails: string[] }) 
 				const tokens = await db.select({ token: session.token }).from(session).where(eq(session.userId, id));
 				for (const { token } of tokens) await kv.del(`auth:${token}`);
 				await kv.del(`auth:active-sessions-${id}`);
+				// Loans with someone who stays: keep their record, with this person as just a name
+				// (otherwise the cascade would leave the lender's copy "lent" forever). Open requests end.
+				await db.execute(sql`update loans set status = 'cancelled', updated_at = now() where status = 'requested' and (lender_id = ${id} or borrower_id = ${id})`);
+				await db.execute(sql`
+					update loans l set borrower_name = coalesce(l.borrower_name, p.display_name), borrower_id = null, updated_at = now()
+					from profiles p where p.user_id = l.borrower_id and l.borrower_id = ${id} and l.lender_id is not null`);
+				await db.execute(sql`
+					update loans l set lender_name = coalesce(l.lender_name, p.display_name), lender_id = null, updated_at = now()
+					from profiles p where p.user_id = l.lender_id and l.lender_id = ${id} and l.borrower_id is not null`);
+				const avatar = (await db.query.profiles.findFirst({ where: eq(profiles.userId, id), columns: { avatarKey: true } }))?.avatarKey;
 				await db.delete(user).where(eq(user.id, id));
+				// Uploaded files go too (GDPR): the avatar lives in R2, not in the database.
+				if (avatar && opts.storage) await opts.storage.delete(avatar).catch(() => {});
 			}
 			await db.execute(sql`delete from households h where not exists (select 1 from household_members m where m.household_id = h.id)`);
 			return due.length;

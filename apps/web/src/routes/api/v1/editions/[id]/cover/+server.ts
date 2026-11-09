@@ -1,6 +1,6 @@
 import { isWebp } from '@bok/server';
 import { error, json } from '@sveltejs/kit';
-import { requireUser } from '#lib/server/api.ts';
+import { guard, requireUser } from '#lib/server/api.ts';
 import type { RequestHandler } from './$types';
 
 const LIMITS = { s: 64 * 1024, m: 256 * 1024, l: 768 * 1024 } as const;
@@ -17,7 +17,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 		if (!isWebp(buf)) error(415, 'Expected WebP images');
 		set[size] = buf;
 	}
-	const res = await locals.svc.editor.setCover(params.id, set, user.id);
+	const res = await guard(() => locals.svc.editor.setCover(params.id, set, user.id));
 	if (!res) error(404, 'Edition not found');
 	return json({ ok: true, cover: locals.svc.storage.url(`${res.coverKey}-m.webp`) });
 };

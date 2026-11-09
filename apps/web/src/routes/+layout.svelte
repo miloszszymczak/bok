@@ -4,6 +4,8 @@
 	import TabBar from '#lib/components/TabBar.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import { m } from '#lib/paraglide/messages.js';
+	import { onMount } from 'svelte';
+	import { connectLive, disconnectLive } from '#lib/client/live.svelte.ts';
 	import type { LayoutProps } from './$types';
 
 	let { children, data }: LayoutProps = $props();
@@ -18,12 +20,15 @@
 		}
 		if (flagged) void import('#lib/client/db.ts').then((d) => d.wipeLocalData());
 	});
+	onMount(() => {
+		if (data.user) connectLive(data.unread);
+		return disconnectLive;
+	});
 	const showTabs = $derived(!!data.profile && !page.url.pathname.startsWith('/auth'));
 </script>
 
 <svelte:head>
 	<title>bok</title>
-	<meta name="description" content={m.meta_description()} />
 </svelte:head>
 
 {#if data.profile?.deletionRequestedAt}

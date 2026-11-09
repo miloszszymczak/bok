@@ -4,7 +4,10 @@ export const QUEUES = {
 	coverMirror: 'cover-mirror',
 	coverSweep: 'cover-sweep',
 	readingStuck: 'reading-stuck',
-	accountPurge: 'account-purge'
+	accountPurge: 'account-purge',
+	loanReminders: 'loan-reminders',
+	importRun: 'import-run',
+	importPurge: 'import-purge'
 } as const;
 
 export interface JobPayloads {
@@ -12,6 +15,9 @@ export interface JobPayloads {
 	[QUEUES.coverSweep]: Record<string, never>;
 	[QUEUES.readingStuck]: Record<string, never>;
 	[QUEUES.accountPurge]: Record<string, never>;
+	[QUEUES.loanReminders]: Record<string, never>;
+	[QUEUES.importRun]: { importId: string };
+	[QUEUES.importPurge]: Record<string, never>;
 }
 
 export type QueueName = keyof JobPayloads;

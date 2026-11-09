@@ -18,6 +18,9 @@ export async function guard<T>(fn: () => Promise<T>): Promise<T> {
 	} catch (e) {
 		if (e instanceof Forbidden) error(403, 'Not your library');
 		if (e instanceof NotFound) error(404, 'Not found');
+		// A malformed id from the URL/body (invalid uuid / date syntax) is a missing thing, not a crash.
+		const code = (e as { code?: string; cause?: { code?: string } }).cause?.code ?? (e as { code?: string }).code;
+		if (code === '22P02' || code === '22007' || code === '22008') error(404, 'Not found');
 		throw e;
 	}
 }

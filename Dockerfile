@@ -26,7 +26,7 @@ WORKDIR /app
 ENV NODE_ENV=production \
     PORT=3000 \
     MIGRATIONS_DIR=/app/packages/db/migrations \
-    BODY_SIZE_LIMIT=2M
+    BODY_SIZE_LIMIT=16M
 ARG BOK_VERSION=dev
 LABEL org.opencontainers.image.title="bok" org.opencontainers.image.version=$BOK_VERSION
 COPY --from=build --chown=node:node /app/node_modules ./node_modules

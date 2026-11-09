@@ -57,3 +57,8 @@ export function daysText(n: number) {
 	const rule = new Intl.PluralRules(getLocale()).select(n);
 	return rule === 'one' ? m.days_one({ n }) : rule === 'few' ? m.days_few({ n }) : m.days_many({ n });
 }
+
+export function booksText(n: number) {
+	const rule = new Intl.PluralRules(getLocale()).select(n);
+	return rule === 'one' ? m.books_one({ n }) : rule === 'few' ? m.books_few({ n }) : m.books_many({ n });
+}

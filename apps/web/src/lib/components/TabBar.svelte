@@ -2,6 +2,7 @@
 	import { page } from '$app/state';
 	import Icon, { type IconName } from './Icon.svelte';
 	import { m } from '#lib/paraglide/messages.js';
+	import { live } from '#lib/client/live.svelte.ts';
 
 	let { handle }: { handle: string } = $props();
 
@@ -27,7 +28,10 @@
 					{#if t.primary}
 						<span class="-mt-5 grid size-14 place-items-center rounded-full bg-accent text-accent-ink shadow-lg ring-4 ring-bg"><Icon name={t.icon} size={26} /></span>
 					{:else}
-						<Icon name={t.icon} stroke={active ? 2.4 : 2} />
+						<span class="relative">
+							<Icon name={t.icon} stroke={active ? 2.4 : 2} />
+							{#if t.icon === 'user' && live.unread}<span class="absolute -top-1 -right-2 min-w-4 rounded-full bg-danger px-1 text-center text-[10px] leading-4 font-bold text-white" data-testid="unread-badge">{live.unread > 9 ? '9+' : live.unread}</span>{/if}
+						</span>
 					{/if}
 					<span>{t.label}</span>
 				</a>

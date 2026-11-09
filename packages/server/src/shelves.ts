@@ -63,6 +63,9 @@ export interface CopyRow {
 	cover: string | null;
 	sectionId: string | null;
 	state: string;
+	/** Active loan of this copy: who has it and until when. */
+	lentTo: string | null;
+	dueOn: string | null;
 }
 
 export interface Place {
@@ -159,7 +162,9 @@ export function createShelves(deps: { db: Db; storage: Storage }) {
 				coverKey: editions.coverKey,
 				coverSourceUrl: editions.coverSourceUrl,
 				sectionId: copies.sectionId,
-				state: copies.state
+				state: copies.state,
+				lentTo: sql<string | null>`(select coalesce(bp.display_name, l.borrower_name) from loans l left join profiles bp on bp.user_id = l.borrower_id where l.copy_id = "copies"."id" and l.status = 'active' limit 1)`,
+				dueOn: sql<string | null>`(select l.due_on::text from loans l where l.copy_id = "copies"."id" and l.status = 'active' limit 1)`
 			})
 			.from(copies)
 			.innerJoin(editions, eq(editions.id, copies.editionId))
@@ -397,13 +402,32 @@ export function createShelves(deps: { db: Db; storage: Storage }) {
 			return out;
 		},
 
+		/**
+		 * Someone's library as another person sees it: distinct books in their households, only
+		 * if their library visibility allows (no shelf locations — those stay private).
+		 */
+		async publicLibrary(viewerId: string | null, ownerId: string, limit = 200) {
+			const [ok] = await db.execute<{ ok: boolean }>(sql`select can_view(${viewerId}, user_id, library_visibility) as ok from profiles where user_id = ${ownerId}`);
+			if (!ok?.ok) return null;
+			const hh = (await memberships(ownerId)).map((m) => m.householdId);
+			if (!hh.length) return [];
+			const rows = await db.execute<{ work_id: string; edition_id: string; title: string; authors: string[]; cover_key: string | null; cover_source_url: string | null }>(sql`
+				select distinct on (w.id) w.id as work_id, e.id as edition_id, e.title, e.cover_key, e.cover_source_url,
+					coalesce((select array_agg(a.name order by wa.position) from work_authors wa join authors a on a.id = wa.author_id where wa.work_id = w.id), '{}') as authors
+				from copies c join editions e on e.id = c.edition_id join works w on w.id = e.work_id
+				where c.household_id in ${hh}
+				order by w.id, c.created_at desc
+				limit ${limit}`);
+			return rows.map((r) => ({ workId: r.work_id, editionId: r.edition_id, title: r.title, authors: r.authors, cover: cover(r.cover_key, r.cover_source_url) }));
+		},
+
 		/** The user's copies of these works (any edition), with where they stand. */
 		async copiesOfWorks(userId: string, workIds: string[]) {
 			if (!workIds.length) return [];
 			const hh = (await memberships(userId)).map((m) => m.householdId);
 			if (!hh.length) return [];
 			const rows = await db
-				.select({ copyId: copies.id, editionId: copies.editionId, workId: editions.workId, sectionId: copies.sectionId, state: copies.state })
+				.select({ copyId: copies.id, editionId: copies.editionId, workId: editions.workId, sectionId: copies.sectionId, state: copies.state, lendable: copies.lendable })
 				.from(copies)
 				.innerJoin(editions, eq(editions.id, copies.editionId))
 				.where(and(inArray(editions.workId, workIds), inArray(copies.householdId, hh)))
@@ -465,17 +489,17 @@ export function createShelves(deps: { db: Db; storage: Storage }) {
 
 		/** Join and make it the active household (new scans go there). Single-use tokens. */
 		async acceptInvite(userId: string, token: string) {
-			const inv = await api.invite(token);
-			if (!inv) return null;
-			await db.transaction(async (tx) => {
+			// Claim the token first (DELETE … RETURNING): two people opening the same link can't both join.
+			return db.transaction(async (tx) => {
+				const [inv] = await tx.delete(householdInvites).where(eq(householdInvites.token, token)).returning();
+				if (!inv || inv.expiresAt < new Date()) return null;
 				await tx.update(householdMembers).set({ isDefault: false }).where(eq(householdMembers.userId, userId));
 				await tx
 					.insert(householdMembers)
 					.values({ householdId: inv.householdId, userId, role: 'member', isDefault: true })
 					.onConflictDoUpdate({ target: [householdMembers.householdId, householdMembers.userId], set: { isDefault: true } });
-				await tx.delete(householdInvites).where(eq(householdInvites.token, token));
+				return inv.householdId;
 			});
-			return inv.householdId;
 		},
 
 		async members(householdId: string) {

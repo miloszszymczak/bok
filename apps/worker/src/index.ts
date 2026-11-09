@@ -26,6 +26,23 @@ await boss.work(QUEUES.readingStuck, async () => {
 });
 await boss.schedule(QUEUES.readingStuck, '30 4 * * *', {}, { tz: 'Europe/Warsaw' });
 
+// Loan reminders: hourly, so each user gets theirs from 9:00 local time (deduplicated per day).
+await boss.work(QUEUES.loanReminders, async () => {
+	const n = await svc.loans.remind();
+	if (n) log.info({ n }, 'sent loan reminders');
+});
+await boss.schedule(QUEUES.loanReminders, '5 * * * *', {});
+
+// Library imports: one job per uploaded file; rows are checkpointed, so a retry resumes.
+await boss.work<{ importId: string }>(QUEUES.importRun, { batchSize: 1 }, async ([job]) => {
+	await svc.imports.run(job!.data.importId);
+});
+await boss.work(QUEUES.importPurge, async () => {
+	const n = await svc.imports.purgeOld();
+	if (n) log.info({ n }, 'purged old import rows');
+});
+await boss.schedule(QUEUES.importPurge, '45 3 * * *', {}, { tz: 'Europe/Warsaw' });
+
 await boss.work(QUEUES.accountPurge, async () => {
 	const n = await svc.accounts.purgeDue();
 	if (n) log.info({ n }, 'purged deleted accounts');

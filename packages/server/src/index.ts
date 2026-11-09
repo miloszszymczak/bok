@@ -8,6 +8,13 @@ import { createLibrary } from './library.ts';
 import { createShelves } from './shelves.ts';
 import { createReading } from './reading.ts';
 import { createTagging } from './tagging.ts';
+import { createNotifications } from './notifications.ts';
+import { createSocial } from './social.ts';
+import { createReadlists } from './readlists.ts';
+import { createPosts } from './posts.ts';
+import { createLoans } from './loans.ts';
+import { createImports } from './imports.ts';
+import { createExports } from './exports.ts';
 import type { ServerConfig } from './config.ts';
 import { createMailer } from './email.ts';
 import { providerDuration, providerRequests } from './metrics.ts';
@@ -29,6 +36,13 @@ export * from './library.ts';
 export * from './shelves.ts';
 export * from './reading.ts';
 export * from './tagging.ts';
+export * from './notifications.ts';
+export * from './social.ts';
+export * from './readlists.ts';
+export * from './posts.ts';
+export * from './loans.ts';
+export * from './imports.ts';
+export * from './exports.ts';
 
 export async function createServices(cfg: ServerConfig, role: 'web' | 'worker', opts: { adminEmails?: string[] } = {}) {
 	const { db, client } = createDb(cfg.databaseUrl, { max: role === 'web' ? 15 : 8, applicationName: `bok-${role}` });
@@ -46,12 +60,19 @@ export async function createServices(cfg: ServerConfig, role: 'web' | 'worker', 
 		}
 	});
 	const catalog = createCatalog({ db, kv, metadata, queue });
-	const accounts = createAccounts(db, kv, { adminEmails: opts.adminEmails ?? [] });
+	const accounts = createAccounts(db, kv, { adminEmails: opts.adminEmails ?? [], storage });
 	const editor = createCatalogEditor(db, catalog, storage);
 	const shelves = createShelves({ db, storage });
 	const library = createLibrary({ db, catalog, accounts, storage, shelves });
 	const reading = createReading({ db, storage });
 	const tagging = createTagging({ db, storage });
+	const notifications = createNotifications({ db, mailer, cfg: { vapid: cfg.vapid, origin: cfg.origin } });
+	const social = createSocial({ db, kv, storage, notifications });
+	const readlists = createReadlists({ db, storage, notifications });
+	const posts = createPosts({ db, storage, notifications });
+	const loans = createLoans({ db, storage, notifications });
+	const exports = createExports({ db });
+	const imports = createImports({ db, catalog, editor, reading, tagging, readlists, library, queue, notifications });
 
 	return {
 		db,
@@ -67,6 +88,15 @@ export async function createServices(cfg: ServerConfig, role: 'web' | 'worker', 
 		shelves,
 		reading,
 		tagging,
+		notifications,
+		social,
+		readlists,
+		posts,
+		loans,
+		imports,
+		exports,
+		/** Raw postgres.js client (LISTEN for live notifications). */
+		sql: client,
 		async close() {
 			await queue.boss.stop({ graceful: true, timeout: 10_000 }).catch(() => {});
 			kv.disconnect();

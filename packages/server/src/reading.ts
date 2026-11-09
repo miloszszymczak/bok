@@ -1,5 +1,5 @@
-import { estimateDays, median, normalizeFinish, suggestPace, type Pace, type Precision } from '@bok/core';
-import { editions, readingEvents, readingGoals, readingStates, reads, works, type Db } from '@bok/db';
+import { computeStats, estimateDays, localDate, median, normalizeFinish, suggestPace, type Pace, type Precision, type StatRead } from '@bok/core';
+import { editions, profiles, readingEvents, readingGoals, readingStates, reads, works, type Db } from '@bok/db';
 import { and, asc, desc, eq, inArray, lt, sql } from 'drizzle-orm';
 import type { Storage } from './storage.ts';
 import { Forbidden, NotFound } from './shelves.ts';
@@ -25,7 +25,11 @@ export interface FinishInput {
 }
 
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
-const today = (now: Date) => now.toISOString().slice(0, 10);
+/** The reader's calendar day (their timezone), not UTC — 00:30 in Warsaw is still "today" there. */
+async function localToday(tx: { query: Db['query'] }, userId: string, now: Date) {
+	const p = await tx.query.profiles.findFirst({ where: eq(profiles.userId, userId), columns: { timezone: true } });
+	return localDate(now, p?.timezone ?? 'Europe/Warsaw');
+}
 
 export function createReading(deps: { db: Db; storage: Storage }) {
 	const { db, storage } = deps;
@@ -68,7 +72,7 @@ export function createReading(deps: { db: Db; storage: Storage }) {
 				workId,
 				editionId: ed && ed.workId === workId ? ed.id : null,
 				format,
-				startedOn: today(now),
+				startedOn: await localToday(tx, userId, now),
 				total: format === 'paper' ? (ed?.pageCount ?? null) : format === 'ebook' ? 100 : null,
 				lastActivityAt: now
 			})
@@ -146,7 +150,7 @@ export function createReading(deps: { db: Db; storage: Storage }) {
 			const now = opts.now ?? new Date();
 			const w = await db.query.works.findFirst({ where: eq(works.id, workId), columns: { id: true } });
 			if (!w) throw new NotFound();
-			if (status === 'read' || status === 'dnf') return api.finish(userId, workId, { outcome: status === 'read' ? 'finished' : 'dnf', date: today(now), precision: 'day' }, now);
+			if (status === 'read' || status === 'dnf') return api.finish(userId, workId, { outcome: status === 'read' ? 'finished' : 'dnf', date: await localToday(db, userId, now), precision: 'day' }, opts.now);
 			await db.transaction(async (tx) => {
 				const prev = await tx.query.readingStates.findFirst({ where: and(eq(readingStates.userId, userId), eq(readingStates.workId, workId)) });
 				if (status === null) {
@@ -196,7 +200,8 @@ export function createReading(deps: { db: Db; storage: Storage }) {
 		},
 
 		/** Finish (or abandon) the current read — or log a read without one (old books, "Past"). */
-		async finish(userId: string, workId: string, input: FinishInput, now = new Date()) {
+		async finish(userId: string, workId: string, input: FinishInput, at?: Date) {
+			const now = at ?? new Date();
 			const outcome = input.outcome ?? 'finished';
 			const { date, precision } = normalizeFinish(input.date ?? null, input.precision ?? null);
 			const rating = input.rating === null || input.rating === undefined ? null : Math.max(0, Math.min(10, Math.round(input.rating)));
@@ -213,6 +218,8 @@ export function createReading(deps: { db: Db; storage: Storage }) {
 					.update(reads)
 					.set({
 						outcome,
+						// Feed order: database clock, like posts and lists (app and DB clocks may differ).
+						finishedAt: at ?? sql`now()`,
 						finishedOn: date,
 						finishedPrecision: precision,
 						rating,
@@ -264,6 +271,78 @@ export function createReading(deps: { db: Db; storage: Storage }) {
 			});
 		},
 
+		/** A read as seen by someone else (null if they may not see it). */
+		async publicRead(viewerId: string | null, readId: string) {
+			const [ok] = await db.execute<{ ok: boolean }>(sql`select can_view(${viewerId}, user_id, visibility) as ok from reads where id = ${readId}`);
+			if (!ok?.ok) return null;
+			const r = await db.query.reads.findFirst({ where: eq(reads.id, readId) });
+			if (!r) return null;
+			const [estimatedDays, w] = await Promise.all([estimateFor(readId, r.finishedOn, r.finishedPrecision), db.query.works.findFirst({ where: eq(works.id, r.workId), columns: { id: true, title: true } })]);
+			return { read: r, estimatedDays, work: w! };
+		},
+
+		/** Profile stats over the reads the viewer may see. */
+		async stats(ownerId: string, viewerId: string | null, year: number) {
+			const [r] = await db.execute<{ total: number; this_year: number; pages_year: number | null; avg_rating: number | null }>(sql`
+				select count(*)::int as total,
+					count(*) filter (where extract(year from finished_on) = ${year})::int as this_year,
+					sum(total) filter (where extract(year from finished_on) = ${year} and format = 'paper')::int as pages_year,
+					round(avg(rating)::numeric / 2, 1)::float as avg_rating
+				from reads where user_id = ${ownerId} and outcome = 'finished' and can_view(${viewerId}, user_id, visibility)`);
+			return { total: r?.total ?? 0, thisYear: r?.this_year ?? 0, pagesThisYear: r?.pages_year ?? 0, avgStars: r?.avg_rating ?? null };
+		},
+
+		/** Finished/abandoned reads the viewer may see, shaped for `computeStats`. */
+		async statReads(ownerId: string, viewerId: string | null): Promise<StatRead[]> {
+			const rows = await db.execute<{
+				work_id: string;
+				title: string;
+				authors: string[];
+				tags: string[];
+				outcome: 'finished' | 'dnf';
+				finished_on: string | null;
+				precision: 'day' | 'month' | 'year' | null;
+				started_on: string | null;
+				pages: number | null;
+				format: 'paper' | 'ebook' | 'audiobook';
+				rating: number | null;
+				pace: 'intensive' | 'usual' | 'slow' | null;
+				override: number | null;
+				cover_key: string | null;
+				cover_source_url: string | null;
+			}>(sql`
+				select r.work_id, w.title,
+					coalesce((select array_agg(a.name order by wa.position) from work_authors wa join authors a on a.id = wa.author_id where wa.work_id = w.id), '{}') as authors,
+					coalesce((select array_agg(t.name) from user_work_tags ut join tags t on t.id = ut.tag_id where ut.user_id = r.user_id and ut.work_id = r.work_id), '{}') as tags,
+					r.outcome, r.finished_on::text, r.finished_precision as precision, r.started_on::text, r.format, r.rating, r.pace, r.duration_days_override as override,
+					case when r.format = 'paper' then coalesce(r.total, e.page_count) when r.format = 'ebook' then e.page_count end as pages,
+					e.cover_key, e.cover_source_url
+				from reads r join works w on w.id = r.work_id
+				left join lateral (select page_count, cover_key, cover_source_url from editions where id = r.edition_id or (r.edition_id is null and work_id = r.work_id) order by (id = r.edition_id) desc nulls last, metadata_quality desc limit 1) e on true
+				where r.user_id = ${ownerId} and r.outcome in ('finished', 'dnf') and can_view(${viewerId}, r.user_id, r.visibility)`);
+			return rows.map((r) => ({
+				workId: r.work_id,
+				title: r.title,
+				authors: r.authors,
+				tags: r.tags,
+				outcome: r.outcome,
+				finishedOn: r.finished_on,
+				precision: r.precision,
+				pages: r.pages,
+				format: r.format,
+				rating: r.rating,
+				pace: r.pace,
+				days: r.override ?? (r.precision === 'day' ? estimateDays(r.started_on, r.finished_on) : null),
+				cover: cover(r.cover_key, r.cover_source_url),
+				coverKey: r.cover_key,
+				coverSrc: r.cover_source_url
+			}));
+		},
+
+		async fullStats(ownerId: string, viewerId: string | null, year: number | null) {
+			return computeStats(await api.statReads(ownerId, viewerId), year);
+		},
+
 		async read(userId: string, readId: string) {
 			const r = await ownRead(userId, readId);
 			const [events, estimatedDays, w] = await Promise.all([
@@ -301,13 +380,18 @@ export function createReading(deps: { db: Db; storage: Storage }) {
 			return due.length;
 		},
 
-		/** Diary entries (finished reads) with book info; filters are optional. */
-		async log(userId: string, f: { year?: number; rating?: number; format?: Format; tagId?: string } = {}) {
+		/**
+		 * Diary entries (finished reads) with book info; filters are optional. With a `viewerId`
+		 * other than the owner, only entries that viewer may see (can_view) are returned.
+		 */
+		async log(userId: string, f: { year?: number; rating?: number; format?: Format; tagId?: string; viewerId?: string | null } = {}) {
 			const conds = [eq(reads.userId, userId), eq(reads.outcome, 'finished')];
+			if (f.viewerId !== undefined && f.viewerId !== userId) conds.push(sql`can_view(${f.viewerId}, ${reads.userId}, ${reads.visibility})`);
 			if (f.year) conds.push(sql`extract(year from ${reads.finishedOn}) = ${f.year}`);
 			if (f.rating !== undefined) conds.push(sql`${reads.rating} >= ${f.rating}`);
 			if (f.format) conds.push(eq(reads.format, f.format));
 			if (f.tagId) conds.push(sql`exists (select 1 from user_work_tags t where t.user_id = ${userId} and t.work_id = ${reads.workId} and t.tag_id = ${f.tagId})`);
+			// (review text is not part of the list; the read page applies the same visibility)
 			const rows = await db
 				.select({
 					id: reads.id,

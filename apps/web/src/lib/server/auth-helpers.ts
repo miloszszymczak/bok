@@ -3,7 +3,8 @@ import { m } from '#lib/paraglide/messages.js';
 
 /** Only allow same-site relative redirects. */
 export function safeNext(next: string | null | undefined, fallback = '/') {
-	return next && next.startsWith('/') && !next.startsWith('//') ? next : fallback;
+	// Same-site paths only: browsers read `/\evil.com` (and tabs/newlines inside it) as `//evil.com`.
+	return next && /^\/(?![\/\\])/.test(next) && !/[\\\s]/.test(next) ? next : fallback;
 }
 
 export function authErrorMessage(e: unknown): string {

@@ -32,7 +32,7 @@
 
 <li class="card flex flex-wrap items-center gap-x-3 gap-y-2 p-2.5 transition {faded ? 'opacity-50' : ''}" data-status={scan.status} data-code={scan.code}>
 	{#if b}
-		<a href="/book/{b.workId}?e={b.editionId}" class="shrink-0"><BookCover src={b.cover} title={b.title} author={b.authors[0]} width={40} /></a>
+		<a href="/book/{b.workId}?e={b.editionId}" class="shrink-0" aria-label={b.title}><BookCover src={b.cover} title={b.title} author={b.authors[0]} width={40} /></a>
 	{:else}
 		<div class="grid h-[60px] w-10 shrink-0 place-items-center rounded-md bg-line/60 text-muted">
 			{#if pending}<span class="size-4 animate-spin rounded-full border-2 border-muted border-t-transparent"></span>{:else}<Icon name="alert" size={18} />{/if}

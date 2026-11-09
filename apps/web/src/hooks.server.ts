@@ -21,7 +21,7 @@ const handleParaglide: Handle = ({ event, resolve }) =>
 		)
 	);
 
-const PUBLIC_PREFIXES = ['/auth', '/api/auth', '/privacy', '/terms', '/offline', '/media', '/healthz', '/readyz', '/metrics', '/book', '/u/'];
+const PUBLIC_PREFIXES = ['/auth', '/api/auth', '/privacy', '/terms', '/offline', '/media', '/healthz', '/readyz', '/metrics', '/book', '/u/', '/read/', '/series/', '/l/', '/og/', '/p/', '/t/'];
 
 const handleSession: Handle = async ({ event, resolve }) => {
 	const theme = event.cookies.get('theme');
@@ -36,7 +36,10 @@ const handleSession: Handle = async ({ event, resolve }) => {
 
 	const auth = getAuth(svc);
 	const session = await auth.api.getSession({ headers: event.request.headers });
-	if (session) {
+	// Suspended accounts are treated as signed out (moderation).
+	if (session && (await svc.social.isSuspended(session.user.id))) {
+		if (path.startsWith('/api/') && !path.startsWith('/api/auth')) return new Response(JSON.stringify({ error: 'suspended' }), { status: 403 });
+	} else if (session) {
 		const u = session.user;
 		event.locals.user = { id: u.id, email: u.email, name: u.name, emailVerified: u.emailVerified };
 		event.locals.sessionToken = session.session.token;

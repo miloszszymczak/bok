@@ -2,7 +2,9 @@ import { authors, copies, editionContributors, editions, householdMembers, workA
 import { error, fail } from '@sveltejs/kit';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { coverSrcset, coverUrl } from '#lib/server/media.ts';
+import { ORIGIN } from '$app/env/private';
 import { guard } from '#lib/server/api.ts';
+import { ogVersion } from '#lib/server/og-version.ts';
 import { finishInput, intOrNull, pick } from '#lib/server/reading-form.ts';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -59,10 +61,20 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 	const { reading } = locals.svc;
 	const [mineReading, medianRate] = locals.user ? await Promise.all([reading.forWork(locals.user.id, work.id), reading.medianRate(locals.user.id)]) : [null, null];
 	const { tagging } = locals.svc;
+	const mentions = await locals.svc.posts.aboutWork(locals.user?.id ?? null, work.id);
+	const { loans } = locals.svc;
+	const [copyLoans, borrowed, lendable] = locals.user
+		? await Promise.all([loans.forCopies(locals.user.id, mine.map((c) => c.copyId)), loans.borrowedWorks(locals.user.id, [work.id]), loans.lendable(locals.user.id, { workId: work.id }, 20)])
+		: [new Map(), [], []];
 	const [tagsForWork, seriesList] = await Promise.all([tagging.forWork(locals.user?.id ?? null, work.id), tagging.seriesForWork(locals.user?.id ?? null, work.id)]);
 
 	const selected = eds.find((e) => e.id === url.searchParams.get('e')) ?? eds[0];
+	const ogV = ogVersion([work.title, workAuthorRows.map((a) => a.name), selected?.coverKey ?? selected?.coverSourceUrl, selected?.publisher]);
 	return {
+		og: {
+			url: `${ORIGIN}/book/${work.id}`,
+			image: `${ORIGIN}/og/book/${work.id}.png?${selected ? `e=${selected.id}&` : ''}v=${ogV}`
+		},
 		reading: mineReading
 			? {
 					status: mineReading.status,
@@ -73,13 +85,20 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 				}
 			: null,
 		medianRate,
+		defaultVisibility: locals.user ? ((await locals.svc.accounts.getProfile(locals.user.id))?.logVisibility ?? 'public') : 'public',
 		tags: tagsForWork,
+		mentions: mentions.posts.slice(0, 5),
 		series: seriesList.filter((x): x is NonNullable<typeof x> => !!x),
 		openFinish: url.searchParams.get('finish') === '1',
+		borrowed,
+		lendable,
 		myCopies: mine.map((c) => ({
 			copyId: c.copyId,
 			editionId: c.editionId,
 			state: c.state,
+			lendable: c.lendable,
+			loan: copyLoans.get(c.copyId)?.active ?? null,
+			loanHistory: copyLoans.get(c.copyId)?.history ?? [],
 			place: c.place,
 			sketch: c.place ? (sketches.get(c.place.containerId) ?? null) : null
 		})),

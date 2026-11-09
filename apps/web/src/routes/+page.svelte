@@ -3,11 +3,15 @@
 	import Icon from '#lib/components/Icon.svelte';
 	import InstallPrompt from '#lib/components/InstallPrompt.svelte';
 	import { progressText, statusLabel } from '#lib/utils/reading.ts';
+	import { live } from '#lib/client/live.svelte.ts';
+	import Feed from '#lib/components/Feed.svelte';
 	import { m } from '#lib/paraglide/messages.js';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 </script>
+
+<svelte:head><meta name="description" content={m.meta_description()} /></svelte:head>
 
 {#if !data.profile}
 	<main class="mx-auto flex min-h-dvh max-w-md flex-col justify-between px-6 pt-[max(3rem,env(safe-area-inset-top))] pb-10">
@@ -30,11 +34,23 @@
 {:else}
 	<header class="mx-auto flex max-w-2xl items-center justify-between px-4 pt-[max(1rem,env(safe-area-inset-top))]">
 		<p class="font-serif text-3xl font-bold">bok</p>
-		<a href="/search" class="grid size-11 place-items-center rounded-full border border-line bg-surface" aria-label={m.nav_search()}><Icon name="search" /></a>
+		<div class="flex gap-2">
+			<a href="/notifications" class="relative grid size-11 place-items-center rounded-full border border-line bg-surface" aria-label={m.notifications_title()} data-testid="bell">
+				<Icon name="bell" />
+				{#if live.unread}<span class="absolute -top-0.5 -right-0.5 min-w-5 rounded-full bg-danger px-1 text-center text-[11px] leading-5 font-bold text-white">{live.unread > 9 ? '9+' : live.unread}</span>{/if}
+			</a>
+			<a href="/search" class="grid size-11 place-items-center rounded-full border border-line bg-surface" aria-label={m.nav_search()}><Icon name="search" /></a>
+		</div>
 	</header>
 	<main class="page space-y-6">
 		<h1 class="font-serif text-2xl font-semibold">{m.home_greeting({ name: data.profile.displayName })}</h1>
 		<InstallPrompt />
+		{#if data.reviewYear}
+			<a href="/u/{data.profile.handle}/year/{data.reviewYear}" class="flex items-center gap-3 rounded-2xl bg-ink p-4 text-bg" data-testid="year-banner">
+				<span class="flex-1"><span class="block font-serif text-lg font-bold">{m.year_banner({ year: data.reviewYear })}</span><span class="text-sm opacity-80">{m.year_banner_sub()}</span></span>
+				<Icon name="forward" />
+			</a>
+		{/if}
 
 		<section class="grid grid-cols-2 gap-3">
 			<a href="/scan" class="card flex flex-col gap-2 p-4 active:scale-[0.99]">
@@ -97,9 +113,9 @@
 			{/if}
 		</section>
 
-		<section class="card p-4 text-sm text-muted">
-			<p class="font-semibold text-ink">{m.home_feed_title()}</p>
-			<p class="mt-1">{m.home_feed_soon()}</p>
-		</section>
+		<div>
+			<h2 class="section-title">{m.home_feed_title()}</h2>
+			<Feed initial={data.feed.items} next={data.feed.next} defaultVisibility={data.defaultVisibility} />
+		</div>
 	</main>
 {/if}

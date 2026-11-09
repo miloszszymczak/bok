@@ -37,6 +37,12 @@ Checks:
 | `npm run test:db` | Integration tests against `bok_test` (local Postgres) |
 | `npm run test:e2e` | End-to-end: scanner with a fake camera (native + WASM decoders), manual add, shelves/designer/inventory/sharing. Needs `npm run dev`; set `CHROME` to a Chromium binary if Playwright's isn't installed, `DATABASE_URL` to also test metadata edits |
 
+Lighthouse (run against a production build, e.g. `PORT=3999 node --env-file=.env apps/web/build/index.js`):
+
+```bash
+CHROME_PATH=/path/to/chrome npx lighthouse http://localhost:3999/l/<slug> --form-factor=mobile --only-categories=performance,accessibility
+```
+
 Scanner debugging: open `/scan?debug` to see the decoder engine and timing; `localStorage['scanner-engine'] = 'zxing'` forces the WASM decoder.
 
 ## Release & deploy
@@ -54,6 +60,7 @@ Before the first deploy:
    `kubectl -n bok create secret docker-registry bok-registry --docker-server=git.mwsz.org --docker-username=milek --docker-password=<token>`
 4. Postgres extensions `pg_trgm`, `unaccent`, `citext` must exist in the database.
 5. Route `bok.mwsz.org` → `svc/bok-web` port 80. Keep `/metrics` internal or set `METRICS_TOKEN`.
+   Server-sent events (`/api/v1/events`) need an unbuffered route — Traefik's default is fine; don't add a buffering middleware.
    adapter-node derives the origin from `X-Forwarded-Proto`/`X-Forwarded-Host` (configured in `config.env`); form posts fail with 403 if those don't match the public URL.
 
 Building on an Apple Silicon Mac for an amd64 cluster needs amd64 emulation in the Docker VM

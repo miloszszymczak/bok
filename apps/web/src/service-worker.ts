@@ -112,3 +112,34 @@ self.addEventListener('fetch', (event) => {
 		);
 	}
 });
+
+// ── Web push ──
+self.addEventListener('push', (event) => {
+	let data: { title?: string; body?: string; url?: string; tag?: string } = {};
+	try {
+		data = event.data?.json() ?? {};
+	} catch {
+		data = { body: event.data?.text() };
+	}
+	event.waitUntil(
+		self.registration.showNotification(data.title ?? 'bok', {
+			body: data.body,
+			tag: data.tag,
+			icon: '/icons/icon-192.png',
+			badge: '/icons/icon-192.png',
+			data: { url: data.url ?? '/notifications' }
+		})
+	);
+});
+
+self.addEventListener('notificationclick', (event) => {
+	event.notification.close();
+	const url = new URL((event.notification.data as { url?: string })?.url ?? '/notifications', self.location.origin).href;
+	event.waitUntil(
+		self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((wins) => {
+			const open = wins.find((w) => new URL(w.url).origin === self.location.origin);
+			if (open) return open.focus().then((w) => w?.navigate(url));
+			return self.clients.openWindow(url);
+		})
+	);
+});
