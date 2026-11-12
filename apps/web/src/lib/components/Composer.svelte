@@ -150,7 +150,7 @@
 	></textarea>
 
 	{#if suggestions.length}
-		<ul class="absolute inset-x-0 z-40 max-h-64 overflow-y-auto rounded-xl border border-line bg-surface shadow-lg" role="listbox" data-testid="suggestions">
+		<ul class="absolute inset-x-0 z-40 popover max-h-64 !overflow-y-auto" role="listbox" data-testid="suggestions">
 			{#each suggestions as s, i (i)}
 				<li>
 					<button type="button" class="flex w-full items-center gap-3 px-3 py-2 text-left text-sm hover:bg-line/40" onclick={() => pick(s)} role="option" aria-selected={i === 0}>

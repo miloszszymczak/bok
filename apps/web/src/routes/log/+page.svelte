@@ -33,9 +33,9 @@
 				<button class="text-sm text-accent" onclick={() => (editingGoal = true)}>{m.book_edit()}</button>
 			</div>
 			<p class="mt-1 font-serif text-3xl font-bold"><span data-testid="goal-done">{g.done}</span> <span class="text-lg text-muted">/ {g.target}</span></p>
-			<div class="relative mt-3 h-2.5 overflow-hidden rounded-full bg-line">
-				<div class="h-full rounded-full bg-accent" style="width:{g.progress.percent}%"></div>
-				<div class="absolute inset-y-0 w-0.5 bg-ink/50" style="left:{Math.min(100, (g.progress.expected / g.target) * 100)}%" title={m.goal_expected({ n: g.progress.expected })}></div>
+			<div class="meter relative mt-3">
+				<div class="meter-fill" style="width:{g.progress.percent}%"></div>
+				<div class="absolute inset-y-0 w-0.5 bg-outline" style="left:{Math.min(100, (g.progress.expected / g.target) * 100)}%" title={m.goal_expected({ n: g.progress.expected })}></div>
 			</div>
 			<p class="mt-2 text-sm {g.progress.diff < 0 ? 'text-warn' : 'text-accent'}" data-testid="goal-status">
 				{g.done >= g.target ? m.goal_done() : g.progress.diff === 0 ? m.goal_on_track() : g.progress.diff > 0 ? m.goal_ahead({ n: g.progress.diff }) : m.goal_behind({ n: -g.progress.diff })}
@@ -53,21 +53,21 @@
 		{/if}
 	</section>
 
-	<div class="-mx-4 flex gap-2 overflow-x-auto px-4 text-sm">
-		<select class="input h-9 w-auto shrink-0 py-0 text-sm" value={data.filters.year ?? ''} onchange={(e) => setFilter('year', e.currentTarget.value)} aria-label={m.log_filter_year()}>
+	<div class="flex flex-wrap gap-2 text-sm">
+		<select class="input h-10 w-auto py-0 pr-9 pl-3 text-sm" value={data.filters.year ?? ''} onchange={(e) => setFilter('year', e.currentTarget.value)} aria-label={m.log_filter_year()}>
 			<option value="">{m.log_all_years()}</option>
 			{#each data.years as y (y)}<option value={y}>{y}</option>{/each}
 		</select>
-		<select class="input h-9 w-auto shrink-0 py-0 text-sm" value={data.filters.rating ?? ''} onchange={(e) => setFilter('rating', e.currentTarget.value)} aria-label={m.log_filter_rating()}>
+		<select class="input h-10 w-auto py-0 pr-9 pl-3 text-sm" value={data.filters.rating ?? ''} onchange={(e) => setFilter('rating', e.currentTarget.value)} aria-label={m.log_filter_rating()}>
 			<option value="">{m.log_any_rating()}</option>
 			{#each [10, 8, 6, 4] as r (r)}<option value={r}>{m.log_rating_at_least({ stars: r / 2 })}</option>{/each}
 		</select>
-		<select class="input h-9 w-auto shrink-0 py-0 text-sm" value={data.filters.format ?? ''} onchange={(e) => setFilter('format', e.currentTarget.value)} aria-label={m.read_format()}>
+		<select class="input h-10 w-auto py-0 pr-9 pl-3 text-sm" value={data.filters.format ?? ''} onchange={(e) => setFilter('format', e.currentTarget.value)} aria-label={m.read_format()}>
 			<option value="">{m.log_any_format()}</option>
 			{#each ['paper', 'ebook', 'audiobook'] as f (f)}<option value={f}>{formatLabelRead(f)}</option>{/each}
 		</select>
 		{#if data.myTags.length}
-			<select class="input h-9 w-auto shrink-0 py-0 text-sm" value={data.filters.tag ?? ''} onchange={(e) => setFilter('tag', e.currentTarget.value)} aria-label={m.tags_title()}>
+			<select class="input h-10 w-auto py-0 pr-9 pl-3 text-sm" value={data.filters.tag ?? ''} onchange={(e) => setFilter('tag', e.currentTarget.value)} aria-label={m.tags_title()}>
 				<option value="">{m.log_any_tag()}</option>
 				{#each data.myTags as t (t.slug)}<option value={t.slug}>#{t.name}</option>{/each}
 			</select>

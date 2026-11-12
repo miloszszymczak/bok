@@ -24,6 +24,12 @@
 		if (data.user) connectLive(data.unread);
 		return disconnectLive;
 	});
+	let resend = $state<'idle' | 'sending' | 'sent' | 'failed'>('idle');
+	async function resendVerification() {
+		resend = 'sending';
+		const r = await fetch('/api/v1/verify-email', { method: 'POST' }).catch(() => null);
+		resend = r?.ok ? 'sent' : 'failed';
+	}
 	const showTabs = $derived(!!data.profile && !page.url.pathname.startsWith('/auth'));
 </script>
 
@@ -36,8 +42,15 @@
 		{m.deletion_banner()} <a href="/settings#danger" class="font-semibold underline">{m.deletion_banner_cta()}</a>
 	</div>
 {:else if data.user && !data.user.emailVerified && !page.url.pathname.startsWith('/auth')}
-	<div class="flex items-center justify-center gap-2 bg-accent-soft px-4 py-2 text-center text-sm">
-		<Icon name="mail" size={16} />{m.verify_banner()}
+	<div class="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 bg-accent-soft px-4 py-2 text-center text-sm" data-testid="verify-banner">
+		<span class="flex items-center gap-2"><Icon name="mail" size={16} />{m.verify_banner()}</span>
+		{#if resend === 'sent'}
+			<span class="font-bold text-accent" role="status">{m.verify_sent()}</span>
+		{:else if resend === 'failed'}
+			<span class="font-bold text-danger" role="status">{m.verify_resend_failed()}</span>
+		{:else}
+			<button type="button" class="font-bold text-accent underline underline-offset-2 disabled:opacity-60" onclick={resendVerification} disabled={resend === 'sending'} data-testid="verify-resend">{m.verify_resend()}</button>
+		{/if}
 	</div>
 {/if}
 

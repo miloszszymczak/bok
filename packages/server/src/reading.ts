@@ -2,7 +2,8 @@ import { computeStats, estimateDays, localDate, median, normalizeFinish, suggest
 import { editions, profiles, readingEvents, readingGoals, readingStates, reads, works, type Db } from '@bok/db';
 import { and, asc, desc, eq, inArray, lt, sql } from 'drizzle-orm';
 import type { Storage } from './storage.ts';
-import { Forbidden, NotFound } from './shelves.ts';
+import { mediaUrls } from './media.ts';
+import { Forbidden, NotFound } from './errors.ts';
 
 export type Status = 'want_to_read' | 'reading' | 'stuck' | 'read' | 'dnf';
 export type Format = 'paper' | 'ebook' | 'audiobook';
@@ -33,7 +34,7 @@ async function localToday(tx: { query: Db['query'] }, userId: string, now: Date)
 
 export function createReading(deps: { db: Db; storage: Storage }) {
 	const { db, storage } = deps;
-	const cover = (key: string | null, src: string | null) => (key ? storage.url(`${key}-s.webp`) : src);
+	const { cover } = mediaUrls(storage);
 
 	async function currentRead(tx: Tx | Db, userId: string, workId: string) {
 		return tx.query.reads.findFirst({
@@ -426,6 +427,11 @@ export function createReading(deps: { db: Db; storage: Storage }) {
 				.groupBy(sql`1`)
 				.orderBy(sql`1 desc`);
 			return rows.map((r) => r.y);
+		},
+
+		/** The calendar year in the reader's timezone (goals and "this year" stats roll over at their midnight). */
+		async currentYear(userId: string, now = new Date()) {
+			return Number((await localToday(db, userId, now)).slice(0, 4));
 		},
 
 		async finishedInYear(userId: string, year: number) {

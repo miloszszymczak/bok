@@ -90,7 +90,7 @@
 	{:else if running}
 		<section class="card space-y-3 p-4" data-testid="import-progress">
 			<p class="font-semibold">{m.import_running()}</p>
-			<div class="h-3 overflow-hidden rounded-full bg-line/60"><div class="h-full rounded-full bg-accent transition-all" style="width: {pct}%"></div></div>
+			<div class="meter"><div class="meter-fill transition-all" style="width: {pct}%"></div></div>
 			<p class="text-sm text-muted">{m.import_progress({ done: imp.stats.processed, total: imp.stats.total })}</p>
 			<p class="text-xs text-muted">{m.import_can_leave()}</p>
 			<form method="POST" action="?/cancel" use:enhance={keep}><button class="btn btn-secondary h-10 text-sm">{m.import_stop()}</button></form>

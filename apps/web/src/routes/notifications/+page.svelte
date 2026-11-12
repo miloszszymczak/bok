@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import TopBar from '#lib/components/TopBar.svelte';
+	import Icon from '#lib/components/Icon.svelte';
 	import { m } from '#lib/paraglide/messages.js';
 	import { getLocale } from '#lib/paraglide/runtime.js';
 	import { live } from '#lib/client/live.svelte.ts';
@@ -30,7 +31,7 @@
 		if (type === 'friend_accept') return m.notif_friend_accept({ name: actor });
 		if (type === 'readlist_saved') return m.notif_readlist_saved({ name: actor });
 		if (type === 'comment') return m.notif_comment({ name: actor });
-		if (type === 'like') return m.notif_like({ name: actor });
+		if (type === 'like') return d.target === 'comment' ? m.notif_like_comment({ name: actor }) : m.notif_like({ name: actor });
 		if (type === 'mention') return m.notif_mention({ name: actor });
 		return type;
 	}
@@ -67,8 +68,10 @@
 					<a href={href(n)} class="flex items-center gap-3 p-3 {n.readAt ? '' : 'bg-accent-soft/50'}" data-type={n.type}>
 						{#if n.actorAvatar}
 							<img src={n.actorAvatar} alt="" class="size-10 shrink-0 rounded-full object-cover" width="40" height="40" />
+						{:else if !n.actorName}
+							<span class="grid size-10 shrink-0 place-items-center rounded-lg border-2 border-outline bg-accent text-accent-ink" aria-hidden="true"><Icon name="bell" size={18} /></span>
 						{:else}
-							<span class="grid size-10 shrink-0 place-items-center rounded-full bg-accent-soft font-serif font-bold text-accent">{(n.actorName ?? 'b').slice(0, 1).toUpperCase()}</span>
+							<span class="grid size-10 shrink-0 place-items-center rounded-full bg-accent-soft font-serif font-bold text-accent">{n.actorName.slice(0, 1).toUpperCase()}</span>
 						{/if}
 						<span class="min-w-0 flex-1 text-sm"><span class="block">{text(n.type, n.actorName ?? '—', (n.data ?? {}) as Record<string, unknown>)}</span><span class="text-xs text-muted">{ago(n.createdAt)}</span></span>
 						{#if !n.readAt}<span class="size-2 shrink-0 rounded-full bg-accent" aria-label={m.notifications_new()}></span>{/if}

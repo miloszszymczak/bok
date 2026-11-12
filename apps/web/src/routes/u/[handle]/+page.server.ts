@@ -20,7 +20,7 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 	const tab = (TABS as readonly string[]).includes(url.searchParams.get('tab') ?? '') ? (url.searchParams.get('tab') as (typeof TABS)[number]) : 'log';
 	const { reading, shelves } = locals.svc;
 	const blockedByMe = p.rel.blocked === 'by_me';
-	const year = new Date().getUTCFullYear();
+	const year = await reading.currentYear(owner);
 	const lists = !blockedByMe && tab === 'readlists' ? await locals.svc.readlists.onProfile(owner, viewerId) : [];
 	const postsPage = !blockedByMe && tab === 'posts' ? await locals.svc.posts.byAuthor(viewerId, owner, url.searchParams.get('cursor')) : { posts: [], next: null };
 	const lending = !blockedByMe && tab === 'lending' && viewerId && viewerId !== owner ? await locals.svc.loans.lendable(viewerId, { ownerId: owner }) : [];

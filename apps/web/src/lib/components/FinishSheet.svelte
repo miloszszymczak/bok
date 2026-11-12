@@ -88,9 +88,9 @@
 			</div>
 			<div class="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-4">
 				{#if !editing}
-					<div class="grid grid-cols-2 rounded-xl bg-line/50 p-1 text-sm font-semibold">
-						<button type="button" class="rounded-lg py-2 {outcome === 'finished' ? 'bg-surface shadow-sm' : 'text-muted'}" onclick={() => (outcome = 'finished')}>{m.finish_finished()}</button>
-						<button type="button" class="rounded-lg py-2 {outcome === 'dnf' ? 'bg-surface shadow-sm' : 'text-muted'}" onclick={() => (outcome = 'dnf')}>{m.finish_dnf()}</button>
+					<div class="segmented grid-cols-2">
+						<button type="button" aria-pressed={outcome === 'finished'} onclick={() => (outcome = 'finished')}>{m.finish_finished()}</button>
+						<button type="button" aria-pressed={outcome === 'dnf'} onclick={() => (outcome = 'dnf')}>{m.finish_dnf()}</button>
 					</div>
 				{/if}
 				<input type="hidden" name="outcome" value={outcome} />

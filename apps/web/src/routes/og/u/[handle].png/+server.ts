@@ -6,7 +6,7 @@ import type { RequestHandler } from './$types';
 export const GET: RequestHandler = async ({ params, locals }) => {
 	const p = await locals.svc.social.profile(null, params.handle);
 	if (!p) error(404);
-	const stats = await locals.svc.reading.stats(p.profile.userId, null, new Date().getUTCFullYear());
+	const stats = await locals.svc.reading.stats(p.profile.userId, null, await locals.svc.reading.currentYear(p.profile.userId));
 	const line = m.og_profile_stats({ read: stats.total, followers: p.counts.followers });
 	const v = ogVersion([p.profile.displayName, p.profile.handle, p.profile.avatarKey, line]);
 	return cachedPng(locals.svc.storage, `og/u/${p.profile.userId}-${v}.png`, async () =>

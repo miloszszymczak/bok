@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { FeedItem } from '@bok/server';
 	import BookCover from './BookCover.svelte';
+	import Icon from './Icon.svelte';
 	import PostCard from './PostCard.svelte';
 	import RatingStars from './RatingStars.svelte';
 	import { m } from '#lib/paraglide/messages.js';
@@ -25,7 +26,7 @@
 		</a>
 		{#if item.review}
 			{#if item.reviewSpoiler && !showReview}
-				<button class="mt-3 w-full rounded-xl bg-bg p-3 text-sm text-muted" onclick={() => (showReview = true)} data-testid="review-spoiler">⚠ {m.spoiler_show()}</button>
+				<button class="mt-3 w-full rounded-xl bg-bg p-3 text-sm text-muted" onclick={() => (showReview = true)} data-testid="review-spoiler"><Icon name="alert" size={16} class="mr-1 inline align-[-3px]" />{m.spoiler_show()}</button>
 			{:else}
 				<p class="mt-3 line-clamp-6 text-sm leading-relaxed whitespace-pre-line">{item.review}</p>
 			{/if}

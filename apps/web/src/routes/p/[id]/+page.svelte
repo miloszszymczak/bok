@@ -2,6 +2,7 @@
 	import { invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
 	import Composer from '#lib/components/Composer.svelte';
+	import Icon from '#lib/components/Icon.svelte';
 	import OgMeta from '#lib/components/OgMeta.svelte';
 	import PostBody from '#lib/components/PostBody.svelte';
 	import PostCard from '#lib/components/PostCard.svelte';
@@ -54,11 +55,11 @@
 					<p class="text-sm"><a href="/u/{c.author.handle}" class="font-semibold">{c.author.displayName}</a> <span class="text-xs text-muted">· {ago(c.createdAt)}</span></p>
 					<div class="mt-1 text-[15px]">
 						{#if c.spoiler && !open.has(c.id)}
-							<button class="text-sm text-muted underline" onclick={() => (open = new Set([...open, c.id]))}>⚠ {m.spoiler_show()}</button>
+							<button class="text-sm text-muted underline" onclick={() => (open = new Set([...open, c.id]))}><Icon name="alert" size={15} class="mr-1 inline align-[-2px]" />{m.spoiler_show()}</button>
 						{:else}<PostBody nodes={c.nodes} compact />{/if}
 					</div>
 					<div class="mt-1.5 flex gap-4 text-xs text-muted">
-						{#if signedIn}<button onclick={() => likeComment(c)} class={c.liked ? 'text-danger' : ''} aria-pressed={c.liked}>{c.liked ? '♥' : '♡'} {c.likes}</button>{:else}<span>♡ {c.likes}</span>{/if}
+						{#if signedIn}<button onclick={() => likeComment(c)} class="flex items-center gap-1 {c.liked ? 'text-danger' : ''}" aria-pressed={c.liked} aria-label={m.post_like()}><Icon name="heart" size={14} class={c.liked ? 'fill-current' : ''} />{c.likes}</button>{:else}<span class="flex items-center gap-1"><Icon name="heart" size={14} />{c.likes}</span>{/if}
 						{#if c.canDelete}<button onclick={() => deleteComment(c.id)}>{m.shelves_delete()}</button>
 						{:else if signedIn}<button onclick={() => (reportingComment = { id: c.id, name: c.author.displayName })}>{m.social_report()}</button>{/if}
 					</div>

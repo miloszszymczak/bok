@@ -28,9 +28,9 @@
 					{#if t.primary}
 						<span class="-mt-7 grid size-14 place-items-center rounded-xl border-[2.5px] border-outline bg-accent text-accent-ink shadow-[4px_4px_0_var(--outline),inset_0_-7px_0_var(--shade)]"><Icon name={t.icon} size={26} stroke={2.4} /></span>
 					{:else}
-						<span class="relative">
+						<span class="relative grid h-7 w-12 place-items-center rounded-md transition-colors {active ? 'bg-accent-soft' : ''}">
 							<Icon name={t.icon} stroke={active ? 2.6 : 2.1} />
-							{#if t.icon === 'user' && live.unread}<span class="absolute -top-1.5 -right-2.5 grid h-5 min-w-5 place-items-center rounded-full border-2 border-outline bg-apricot px-1 text-[10px] leading-none font-bold text-accent-ink" data-testid="unread-badge">{live.unread > 9 ? '9+' : live.unread}</span>{/if}
+							{#if t.icon === 'user' && live.unread}<span class="absolute -top-1.5 right-0 grid h-5 min-w-5 place-items-center rounded-full border-2 border-outline bg-apricot px-1 text-[10px] leading-none font-bold text-accent-ink" data-testid="unread-badge">{live.unread > 9 ? '9+' : live.unread}</span>{/if}
 						</span>
 					{/if}
 					<span>{t.label}</span>

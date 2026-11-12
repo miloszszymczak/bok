@@ -22,9 +22,9 @@
 	{/snippet}
 </TopBar>
 <main class="page">
-	<div class="mb-4 grid grid-cols-2 rounded-xl bg-line/50 p-1 text-sm font-semibold" role="tablist">
-		<a href="/library" role="tab" aria-selected={data.view === 'books'} class="rounded-lg py-2 text-center {data.view === 'books' ? 'bg-surface shadow-sm' : 'text-muted'}" data-sveltekit-replacestate>{m.library_tab_books()}</a>
-		<a href="/library?view=shelves" role="tab" aria-selected={data.view === 'shelves'} class="rounded-lg py-2 text-center {data.view === 'shelves' ? 'bg-surface shadow-sm' : 'text-muted'}" data-sveltekit-replacestate>{m.library_tab_shelves()}</a>
+	<div class="segmented mb-4 grid-cols-2" role="tablist">
+		<a href="/library" role="tab" aria-selected={data.view === 'books'} data-sveltekit-replacestate>{m.library_tab_books()}</a>
+		<a href="/library?view=shelves" role="tab" aria-selected={data.view === 'shelves'} data-sveltekit-replacestate>{m.library_tab_shelves()}</a>
 	</div>
 
 	{#if data.view === 'books'}
@@ -83,7 +83,7 @@
 					</form>
 				</div>
 				{#if loc.containers.length}
-					<div class="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-2">
+					<div class="-mx-4 flex snap-x scroll-px-4 gap-3 overflow-x-auto px-4 pt-0.5 pb-2">
 						{#each loc.containers as c (c.id)}
 							<a href="/library/c/{c.id}" class="card w-40 shrink-0 snap-start p-2.5">
 								<ShelfSketch layout={c.layout} sections={c.sections} labels={false} title={c.name} />

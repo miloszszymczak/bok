@@ -35,11 +35,11 @@
 	<header class="mx-auto flex max-w-2xl items-center justify-between px-5 pt-[max(1.25rem,env(safe-area-inset-top))]">
 		<p class="font-serif text-3xl font-bold">bok</p>
 		<div class="flex gap-2">
-			<a href="/notifications" class="relative grid size-11 place-items-center rounded-lg border-[2.5px] border-outline bg-surface shadow-[3px_3px_0_var(--outline)]" aria-label={m.notifications_title()} data-testid="bell">
+			<a href="/notifications" class="icon-btn" aria-label={m.notifications_title()} data-testid="bell">
 				<Icon name="bell" />
 				{#if live.unread}<span class="absolute -top-2 -right-2 min-w-5 rounded-full border-2 border-outline bg-apricot px-1 text-center text-[11px] leading-4 font-bold text-accent-ink">{live.unread > 9 ? '9+' : live.unread}</span>{/if}
 			</a>
-			<a href="/search" class="grid size-11 place-items-center rounded-lg border-[2.5px] border-outline bg-surface shadow-[3px_3px_0_var(--outline)]" aria-label={m.nav_search()}><Icon name="search" /></a>
+			<a href="/search" class="icon-btn" aria-label={m.nav_search()}><Icon name="search" /></a>
 		</div>
 	</header>
 	<main class="page space-y-6">
@@ -53,12 +53,12 @@
 		{/if}
 
 		<section class="grid grid-cols-2 gap-3">
-			<a href="/scan" class="card flex flex-col gap-2 p-4 text-accent-ink !bg-accent shadow-[4px_4px_0_var(--outline),inset_0_-10px_0_var(--shade)] active:translate-x-0.5 active:translate-y-0.5">
+			<a href="/scan" class="card card-band flex flex-col gap-2 !bg-accent p-4 text-accent-ink">
 				<Icon name="scan" size={28} />
 				<span class="font-serif text-lg font-semibold">{m.home_action_scan()}</span>
 				<span class="text-sm opacity-85">{m.home_action_scan_hint()}</span>
 			</a>
-			<a href="/search" class="card flex flex-col gap-2 p-4 text-accent-ink !bg-apricot shadow-[4px_4px_0_var(--outline),inset_0_-10px_0_var(--shade)] active:translate-x-0.5 active:translate-y-0.5">
+			<a href="/search" class="card card-band flex flex-col gap-2 !bg-apricot p-4 text-accent-ink">
 				<Icon name="search" size={28} />
 				<span class="font-serif text-lg font-semibold">{m.home_action_search()}</span>
 				<span class="text-sm opacity-85">{m.home_action_search_hint()}</span>
@@ -76,7 +76,7 @@
 							<div class="min-w-0 flex-1">
 								<p class="truncate font-medium">{r.title}</p>
 								<p class="text-xs {r.status === 'stuck' ? 'text-warn' : 'text-muted'}">{r.status === 'stuck' ? statusLabel('stuck') : progressText(r.progress, r.total, r.format) || m.status_reading()}</p>
-								{#if pct !== null}<div class="mt-1.5 h-1.5 overflow-hidden rounded-full bg-line"><div class="h-full rounded-full bg-accent" style="width:{pct}%"></div></div>{/if}
+								{#if pct !== null}<div class="meter mt-1.5 h-2.5"><div class="meter-fill" style="width:{pct}%"></div></div>{/if}
 							</div>
 						</a>
 					{/each}
@@ -87,7 +87,7 @@
 		{#if data.goal}
 			<a href="/log" class="card block p-4">
 				<div class="flex items-baseline justify-between"><p class="font-semibold">{m.goal_title({ year: data.goal.year })}</p><p class="text-sm text-muted">{data.goal.done} / {data.goal.target}</p></div>
-				<div class="mt-2 h-2 overflow-hidden rounded-full bg-line"><div class="h-full rounded-full bg-accent" style="width:{Math.min(100, (data.goal.done / data.goal.target) * 100)}%"></div></div>
+				<div class="meter mt-2"><div class="meter-fill" style="width:{Math.min(100, (data.goal.done / data.goal.target) * 100)}%"></div></div>
 			</a>
 		{/if}
 
@@ -97,7 +97,7 @@
 				{#if data.total}<a href="/library" class="text-sm font-medium text-accent">{m.home_library_count({ count: data.total })}</a>{/if}
 			</div>
 			{#if data.recent.length}
-				<div class="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-2">
+				<div class="-mx-4 flex snap-x scroll-px-4 gap-3 overflow-x-auto px-4 pt-0.5 pb-2">
 					{#each data.recent as b, i (b.workId + i)}
 						<a href="/book/{b.workId}" class="w-24 shrink-0 snap-start">
 							<BookCover src={b.cover} srcset={b.srcset ?? undefined} title={b.title} author={b.authors[0]} width={96} eager={i < 4} />

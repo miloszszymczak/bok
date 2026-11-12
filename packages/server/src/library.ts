@@ -5,6 +5,7 @@ import type { Accounts } from './accounts.ts';
 import type { Catalog } from './catalog.ts';
 import type { Shelves } from './shelves.ts';
 import type { Storage } from './storage.ts';
+import { mediaUrls } from './media.ts';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -76,7 +77,7 @@ export function createLibrary(deps: { db: Db; catalog: Catalog; accounts: Accoun
 		sectionId: c.sectionId,
 		...(c.lentTo ? { lentTo: c.lentTo, dueOn: c.dueOn ?? null } : {})
 	});
-	const cover = (key: string | null, src: string | null) => (key ? storage.url(`${key}-s.webp`) : src);
+	const { cover } = mediaUrls(storage);
 	const myHouseholds = (userId: string) =>
 		db.select({ id: householdMembers.householdId }).from(householdMembers).where(eq(householdMembers.userId, userId));
 
@@ -235,6 +236,29 @@ export function createLibrary(deps: { db: Db; catalog: Catalog; accounts: Accoun
 		},
 
 		/** Everything the device caches for offline duplicate hints and bookstore mode. */
+		/** Newest copies in my households (home screen), plus how many there are in all. */
+		async recent(userId: string, limit = 12) {
+			const mine = db.select({ id: householdMembers.householdId }).from(householdMembers).where(eq(householdMembers.userId, userId));
+			const [rows, [count]] = await Promise.all([
+				db
+					.select({
+						workId: works.id,
+						title: editions.title,
+						coverKey: editions.coverKey,
+						coverSourceUrl: editions.coverSourceUrl,
+						authors: sql<string[]>`coalesce((select array_agg(a.name order by wa.position) from work_authors wa join authors a on a.id = wa.author_id where wa.work_id = ${works.id}), '{}')`
+					})
+					.from(copies)
+					.innerJoin(editions, eq(editions.id, copies.editionId))
+					.innerJoin(works, eq(works.id, editions.workId))
+					.where(sql`${copies.householdId} in ${mine}`)
+					.orderBy(desc(copies.createdAt))
+					.limit(limit),
+				db.select({ n: sql<number>`count(*)::int` }).from(copies).where(sql`${copies.householdId} in ${mine}`)
+			]);
+			return { books: rows, total: count?.n ?? 0 };
+		},
+
 		async snapshot(userId: string) {
 			const rows = await db
 				.select({

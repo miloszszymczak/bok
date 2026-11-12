@@ -16,9 +16,9 @@ import {
 } from '@bok/db';
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { Storage } from './storage.ts';
+import { Forbidden, NotFound } from './errors.ts';
+import { mediaUrls } from './media.ts';
 
-export class Forbidden extends Error {}
-export class NotFound extends Error {}
 
 export interface SectionNode {
 	id: string;
@@ -82,7 +82,7 @@ const label = (s: { col: number; row: number; customLabel: string | null }) => s
 
 export function createShelves(deps: { db: Db; storage: Storage }) {
 	const { db, storage } = deps;
-	const cover = (key: string | null, src: string | null) => (key ? storage.url(`${key}-s.webp`) : src);
+	const { cover } = mediaUrls(storage);
 
 	async function memberships(userId: string) {
 		return db

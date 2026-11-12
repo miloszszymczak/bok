@@ -8,6 +8,7 @@
 
 	let { data, form }: PageProps = $props();
 	let busy = $state(false);
+	let fileName = $state('');
 	let guide = $state<'goodreads' | 'lubimyczytac' | null>(null);
 	const errorText = (e: string) => (e === 'too_large' ? m.import_err_too_large() : e === 'no_title_column' ? m.import_err_columns() : e === 'too_many_rows' ? m.import_err_rows() : e === 'rate' ? m.import_err_rate() : m.import_err_empty());
 </script>
@@ -18,7 +19,11 @@
 <main class="page space-y-6">
 	<form method="POST" action="?/upload" enctype="multipart/form-data" class="card space-y-3 p-4" use:enhance={() => { busy = true; return async ({ update }) => { await update(); busy = false; }; }}>
 		<p class="text-sm">{m.import_intro()}</p>
-		<input type="file" name="file" accept=".csv,text/csv" required class="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-accent-soft file:px-3 file:py-2 file:font-semibold file:text-accent" data-testid="import-file" />
+		<label class="flex items-center gap-3">
+			<input type="file" name="file" accept=".csv,text/csv" required class="peer sr-only" data-testid="import-file" onchange={(e) => (fileName = e.currentTarget.files?.[0]?.name ?? '')} />
+			<span class="btn btn-secondary h-10 shrink-0 cursor-pointer px-3 text-sm peer-focus-visible:outline-3 peer-focus-visible:outline-accent-text">{m.import_choose_file()}</span>
+			<span class="min-w-0 truncate text-sm {fileName ? 'font-semibold' : 'text-muted'}">{fileName || m.import_no_file()}</span>
+		</label>
 		{#if form?.error}<p class="text-sm text-danger" role="alert">{errorText(form.error)}</p>{/if}
 		<button class="btn btn-primary w-full" disabled={busy} data-testid="import-upload">{busy ? m.common_loading() : m.import_upload()}</button>
 		<p class="text-xs text-muted">{m.import_nothing_yet()}</p>

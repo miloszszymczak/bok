@@ -13,7 +13,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const tagSlug = sp.get('tag');
 	const tag = tagSlug ? await tagging.bySlug(tagSlug) : undefined;
 	const now = new Date();
-	const thisYear = now.getUTCFullYear();
+	const thisYear = await reading.currentYear(userId, now);
 	const [entries, years, target, done, myTags] = await Promise.all([
 		reading.log(userId, { year, rating, format, tagId: tag?.id }),
 		reading.years(userId),
@@ -33,7 +33,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 export const actions: Actions = {
 	goal: async ({ request, locals }) => {
 		const f = await request.formData();
-		const year = intOrNull(f.get('year')) ?? new Date().getUTCFullYear();
+		const year = intOrNull(f.get('year')) ?? (await locals.svc.reading.currentYear(locals.user!.id));
 		const target = intOrNull(f.get('target'));
 		if (target !== null && (target < 1 || target > 1000)) return fail(400, { goalError: true });
 		await locals.svc.reading.setGoal(locals.user!.id, year, target);

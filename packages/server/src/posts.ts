@@ -3,7 +3,8 @@ import { comments, likes, postBookRefs, postMentions, posts, postTags, profiles,
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { Notifications } from './notifications.ts';
 import type { Storage } from './storage.ts';
-import { Forbidden, NotFound } from './shelves.ts';
+import { mediaUrls } from './media.ts';
+import { Forbidden, NotFound } from './errors.ts';
 
 export type PostVisibility = 'public' | 'followers' | 'friends' | 'private';
 export const POST_VISIBILITIES: PostVisibility[] = ['public', 'followers', 'friends', 'private'];
@@ -62,18 +63,23 @@ export type FeedItem =
 	  }
 	| { kind: 'list'; at: string; key: string; id: string; actor: Author; title: string; slug: string; count: number; covers: (string | null)[] };
 
-/** Opaque keyset cursor: "<iso time>|<id>". */
+/**
+ * Opaque keyset cursor: "<time>|<id>". The time is formatted by Postgres with microseconds:
+ * a JS Date only keeps milliseconds, and a rounded cursor would skip rows from the same millisecond.
+ */
 const encodeCursor = (at: string, id: string) => Buffer.from(`${at}|${id}`).toString('base64url');
+const CURSOR_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/;
 function decodeCursor(c: string | null | undefined): { at: string; id: string } | null {
 	if (!c) return null;
 	const [at, id] = Buffer.from(c, 'base64url').toString().split('|');
-	return at && id && !Number.isNaN(Date.parse(at)) ? { at, id } : null;
+	return at && id && CURSOR_TIME.test(at) ? { at, id } : null;
 }
+/** A timestamptz column as cursor text (UTC, microseconds). */
+const cursorTime = (col: ReturnType<typeof sql>) => sql`to_char(${col} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
 
 export function createPosts(deps: { db: Db; storage: Storage; notifications: Notifications }) {
 	const { db, storage, notifications } = deps;
-	const avatar = (k: string | null) => (k ? storage.url(k) : null);
-	const cover = (key: string | null, src: string | null) => (key ? storage.url(`${key}-s.webp`) : src);
+	const { avatar, cover } = mediaUrls(storage);
 
 	/** May `viewer` see this post? (author visibility rules + moderation + blocks). */
 	const visiblePost = (viewer: string | null) =>
@@ -134,7 +140,7 @@ export function createPosts(deps: { db: Db; storage: Storage; notifications: Not
 			select p.id, p.author_id, p.body, p.visibility, p.spoiler, p.created_at, p.edited_at, a.handle, a.display_name, a.avatar_key,
 				(select count(*)::int from likes l where l.target_type = 'post' and l.target_id = p.id) as likes,
 				${viewer ? sql`exists (select 1 from likes l where l.target_type = 'post' and l.target_id = p.id and l.user_id = ${viewer})` : sql`false`} as liked,
-				(select count(*)::int from comments c where c.post_id = p.id and c.hidden_at is null) as comments
+				(select count(*)::int from comments c join profiles ca on ca.user_id = c.author_id where c.post_id = p.id and c.hidden_at is null and ca.hidden_at is null and ca.suspended_at is null and ca.deletion_requested_at is null) as comments
 			from posts p join profiles a on a.user_id = p.author_id
 			where p.id in ${ids}`);
 		const refs = await db.execute<{ post_id: string; work_id: string; title: string; cover_key: string | null; cover_source_url: string | null }>(sql`
@@ -165,15 +171,15 @@ export function createPosts(deps: { db: Db; storage: Storage; notifications: Not
 
 	async function page(viewer: string | null, where: ReturnType<typeof sql>, cursor?: string | null, limit = 20) {
 		const c = decodeCursor(cursor);
-		const rows = await db.execute<{ id: string; created_at: Date }>(sql`
-			select p.id, p.created_at from posts p
+		const rows = await db.execute<{ id: string; cur: string }>(sql`
+			select p.id, ${cursorTime(sql`p.created_at`)} as cur from posts p
 			where ${visiblePost(viewer)} and ${where}
 				${c ? sql`and (p.created_at, p.id::text) < (${c.at}::timestamptz, ${c.id})` : sql``}
 			order by p.created_at desc, p.id desc limit ${limit + 1}`);
 		const more = rows.length > limit;
 		const pageRows = rows.slice(0, limit);
 		const last = pageRows.at(-1);
-		return { posts: await hydrate(viewer, pageRows.map((r) => r.id)), next: more && last ? encodeCursor(new Date(last.created_at).toISOString(), last.id) : null };
+		return { posts: await hydrate(viewer, pageRows.map((r) => r.id)), next: more && last ? encodeCursor(last.cur, last.id) : null };
 	}
 
 	async function ownPost(userId: string, postId: string) {
@@ -244,7 +250,7 @@ export function createPosts(deps: { db: Db; storage: Storage; notifications: Not
 					targetType === 'post'
 						? (await db.query.posts.findFirst({ where: eq(posts.id, targetId), columns: { authorId: true } }))?.authorId
 						: (await db.query.comments.findFirst({ where: eq(comments.id, targetId), columns: { authorId: true } }))?.authorId;
-				if (owner) await notifications.notify(owner, 'like', { actorId: userId, data: { url: `/p/${postId}` }, dedupeKey: `like:${targetType}:${targetId}:${userId}` });
+				if (owner) await notifications.notify(owner, 'like', { actorId: userId, data: { url: targetType === 'comment' ? `/p/${postId}#c-${targetId}` : `/p/${postId}`, target: targetType }, dedupeKey: `like:${targetType}:${targetId}:${userId}` });
 			}
 		},
 
@@ -261,7 +267,7 @@ export function createPosts(deps: { db: Db; storage: Storage; notifications: Not
 					(select count(*)::int from likes l where l.target_type = 'comment' and l.target_id = c.id) as likes,
 					${viewer ? sql`exists (select 1 from likes l where l.target_type = 'comment' and l.target_id = c.id and l.user_id = ${viewer})` : sql`false`} as liked
 				from comments c join profiles a on a.user_id = c.author_id
-				where c.post_id = ${postId} and c.hidden_at is null and a.hidden_at is null and a.suspended_at is null
+				where c.post_id = ${postId} and c.hidden_at is null and a.hidden_at is null and a.suspended_at is null and a.deletion_requested_at is null
 					${viewer ? sql`and not exists (select 1 from blocks b where (b.blocker_id = ${viewer} and b.blocked_id = c.author_id) or (b.blocker_id = c.author_id and b.blocked_id = ${viewer}))` : sql``}
 				order by c.created_at asc limit 500`);
 			return rows.map((r) => ({
@@ -311,13 +317,13 @@ export function createPosts(deps: { db: Db; storage: Storage; notifications: Not
 		async feed(viewer: string, cursor?: string | null, limit = 20) {
 			const c = decodeCursor(cursor);
 			const after = (at: ReturnType<typeof sql>, id: ReturnType<typeof sql>) => (c ? sql`and (${at}, ${id}::text) < (${c.at}::timestamptz, ${c.id})` : sql``);
-			const rows = await db.execute<{ kind: 'post' | 'read' | 'list'; id: string; actor: string; at: Date }>(sql`
+			const rows = await db.execute<{ kind: 'post' | 'read' | 'list'; id: string; actor: string; at: Date; cur: string }>(sql`
 				with circle as (
 					select followee_id as uid from follows where follower_id = ${viewer}
 					union select case when user_low = ${viewer} then user_high else user_low end from friendships where status = 'accepted' and (user_low = ${viewer} or user_high = ${viewer})
 					union select ${viewer}::uuid
 				)
-				select x.* from (
+				select x.*, ${cursorTime(sql`x.at`)} as cur from (
 					(select 'post' as kind, p.id::text as id, p.author_id as actor, p.created_at as at from posts p
 						where p.author_id in (select uid from circle) and ${visiblePost(viewer)} ${after(sql`p.created_at`, sql`p.id`)}
 						order by p.created_at desc, p.id desc limit ${limit + 1})
@@ -391,7 +397,7 @@ export function createPosts(deps: { db: Db; storage: Storage; notifications: Not
 					if (l) feed.push({ kind: 'list', at, key, id: l.id, actor: actor(it.actor), title: l.title, slug: l.slug, count: l.count, covers: (l.covers ?? []).map((c) => cover(c.key, c.src)) });
 				}
 			}
-			return { items: feed, next: more && last ? encodeCursor(new Date(last.at).toISOString(), last.id) : null };
+			return { items: feed, next: more && last ? encodeCursor(last.cur, last.id) : null };
 		},
 
 		/** For link previews: plain text with spoilers hidden (whole-post spoilers say so instead). */

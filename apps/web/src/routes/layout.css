@@ -1,13 +1,12 @@
 @import 'tailwindcss';
 @plugin '@tailwindcss/forms';
 
-/* Fonts are self-hosted (offline PWA, strict CSP); only the latin + latin-ext subsets (Polish). */
-@import '@fontsource/fredoka/latin-500.css';
-@import '@fontsource/fredoka/latin-ext-500.css';
-@import '@fontsource/fredoka/latin-600.css';
-@import '@fontsource/fredoka/latin-ext-600.css';
-@import '@fontsource/fredoka/latin-700.css';
-@import '@fontsource/fredoka/latin-ext-700.css';
+/* Fonts are self-hosted (offline PWA, strict CSP); only the latin + latin-ext subsets (Polish).
+ * Display face is Baloo 2 (Fredoka has no ą/ę/ż — Polish headings mixed fonts). */
+@import '@fontsource/baloo-2/latin-600.css';
+@import '@fontsource/baloo-2/latin-ext-600.css';
+@import '@fontsource/baloo-2/latin-700.css';
+@import '@fontsource/baloo-2/latin-ext-700.css';
 @import '@fontsource/nunito/latin-400.css';
 @import '@fontsource/nunito/latin-ext-400.css';
 @import '@fontsource/nunito/latin-400-italic.css';
@@ -17,10 +16,20 @@
 @import '@fontsource/nunito/latin-700.css';
 @import '@fontsource/nunito/latin-ext-700.css';
 
-@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+/* Dark when chosen in Settings, or when the system is dark and light wasn't chosen (matches the tokens below). */
+@custom-variant dark {
+	&:where([data-theme='dark'], [data-theme='dark'] *) {
+		@slot;
+	}
+	@media (prefers-color-scheme: dark) {
+		&:where(:root:not([data-theme='light']), :root:not([data-theme='light']) *) {
+			@slot;
+		}
+	}
+}
 
 /*
- * "Ink & Paper": cel-shaded, comic-like but calm. Flat fills, solid ink outlines, hard offset
+ * "Ink & Paper" (Garden palette): cel-shaded, comic-like but calm. Flat fills, solid ink outlines, hard offset
  * shadows without blur, a darker band at the bottom of buttons instead of gradients.
  * Pastel accents are fills only; text on them is ink. --accent-text is the readable shade.
  */
@@ -39,7 +48,7 @@
 	--color-danger: var(--danger);
 	--color-warn: var(--warn);
 	/* "serif" is the display face across the app (headings, titles). */
-	--font-serif: 'Fredoka', 'Nunito', system-ui, sans-serif;
+	--font-serif: 'Baloo 2', 'Nunito', system-ui, sans-serif;
 	--font-sans: 'Nunito', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 	/* Less round than Tailwind's defaults. */
 	--radius-sm: 0.1875rem;
@@ -52,56 +61,56 @@
 }
 
 :root {
-	--bg: #f3eee4;
-	--surface: #fbf8f2;
-	--ink: #2e2a26;
-	--muted: #5e564d;
-	--line: #d9cfc0;
-	--outline: #2e2a26;
-	--accent: #9db8a6;
-	--accent-ink: #2e2a26;
-	--accent-soft: #dce7df;
-	--accent-text: #4a6b58;
-	--apricot: #e3b38b;
-	--danger: #a33b2b;
+	--bg: #f5f0df;
+	--surface: #fdfaf0;
+	--ink: #2b2a24;
+	--muted: #5c584c;
+	--line: #d8ccb8;
+	--outline: #2b2a24;
+	--accent: #79c08f;
+	--accent-ink: #2b2a24;
+	--accent-soft: #cfeed8;
+	--accent-text: #2f7349;
+	--apricot: #f59e6b;
+	--danger: #b0412c;
 	--warn: #8a5a10;
-	--shade: rgba(46, 42, 38, 0.14);
+	--shade: rgba(43, 42, 36, 0.15);
 	color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
 	:root:not([data-theme='light']) {
-		--bg: #2b303a;
-		--surface: #363c48;
-		--ink: #e8e4da;
-		--muted: #b3aea3;
-		--line: #4a5160;
-		--outline: #16191e;
-		--accent: #8fae8b;
-		--accent-ink: #16191e;
-		--accent-soft: #3c4a42;
-		--accent-text: #a9c6a5;
-		--apricot: #d9967e;
-		--danger: #e8907c;
+		--bg: #252b27;
+		--surface: #313833;
+		--ink: #e9e6dc;
+		--muted: #b2b1a6;
+		--line: #47504a;
+		--outline: #141815;
+		--accent: #74b887;
+		--accent-ink: #141815;
+		--accent-soft: #32503c;
+		--accent-text: #98d8ab;
+		--apricot: #e8956a;
+		--danger: #ec917c;
 		--warn: #dcb96e;
-		--shade: rgba(22, 25, 30, 0.22);
+		--shade: rgba(20, 24, 21, 0.22);
 		color-scheme: dark;
 	}
 }
 :root[data-theme='dark'] {
-	--bg: #2b303a;
-	--surface: #363c48;
-	--ink: #e8e4da;
-	--muted: #b3aea3;
-	--line: #4a5160;
-	--outline: #16191e;
-	--accent: #8fae8b;
-	--accent-ink: #16191e;
-	--accent-soft: #3c4a42;
-	--accent-text: #a9c6a5;
-	--apricot: #d9967e;
-	--danger: #e8907c;
+	--bg: #252b27;
+	--surface: #313833;
+	--ink: #e9e6dc;
+	--muted: #b2b1a6;
+	--line: #47504a;
+	--outline: #141815;
+	--accent: #74b887;
+	--accent-ink: #141815;
+	--accent-soft: #32503c;
+	--accent-text: #98d8ab;
+	--apricot: #e8956a;
+	--danger: #ec917c;
 	--warn: #dcb96e;
-	--shade: rgba(22, 25, 30, 0.22);
+	--shade: rgba(20, 24, 21, 0.22);
 	color-scheme: dark;
 }
 
@@ -131,10 +140,89 @@ body {
 		border-radius: var(--radius-xl);
 		border: 2.5px solid var(--outline);
 		background: var(--surface);
-		box-shadow: 4px 4px 0 var(--outline);
+		--lift: 4px;
+		box-shadow:
+			var(--lift) var(--lift) 0 var(--outline),
+			var(--card-band, 0 0 0 transparent);
+	}
+	/* Filled tiles get the same darker bottom band as buttons. */
+	.card-band {
+		--card-band: inset 0 -10px 0 var(--shade);
+	}
+	/* Cards that are links or buttons react to touch like buttons do. */
+	a.card,
+	button.card {
+		transition:
+			transform 80ms ease-out,
+			box-shadow 80ms ease-out;
+	}
+	a.card:hover,
+	button.card:hover {
+		transform: translate(-1px, -1px);
+		--lift: 5px;
+	}
+	a.card:active,
+	button.card:active {
+		transform: translate(2px, 2px);
+		--lift: 2px;
+	}
+	/* Menus, autocomplete lists and other floating panels: outlined, hard shadow (never blurred). */
+	.popover {
+		overflow: hidden;
+		border-radius: var(--radius-xl);
+		border: 2px solid var(--outline);
+		background: var(--surface);
+		box-shadow: 3px 3px 0 var(--outline);
+	}
+	/* Square icon button (page headers). */
+	.icon-btn {
+		@apply relative grid size-11 shrink-0 place-items-center;
+		border-radius: var(--radius-lg);
+		border: 2.5px solid var(--outline);
+		background: var(--surface);
+		box-shadow: 3px 3px 0 var(--outline);
+		transition:
+			transform 80ms ease-out,
+			box-shadow 80ms ease-out;
+	}
+	.icon-btn:hover {
+		background: var(--accent-soft);
+	}
+	.icon-btn:active {
+		transform: translate(2px, 2px);
+		box-shadow: 1px 1px 0 var(--outline);
+	}
+	/* Progress bar: an outlined track with a flat fill (the child element, sized inline). */
+	.meter {
+		height: 0.75rem;
+		overflow: hidden;
+		border-radius: 999px;
+		border: 2px solid var(--outline);
+		background: var(--surface);
+	}
+	.meter-fill {
+		height: 100%;
+		background: var(--accent);
+	}
+	/* Segmented control (two or three choices in one row). */
+	.segmented {
+		@apply grid gap-1 p-1 text-sm font-bold;
+		border-radius: var(--radius-xl);
+		border: 2px solid var(--outline);
+		background: var(--bg);
+	}
+	.segmented > * {
+		@apply py-2 text-center text-muted;
+		border-radius: var(--radius-md);
+	}
+	.segmented > [aria-selected='true'],
+	.segmented > [aria-pressed='true'] {
+		background: var(--accent);
+		color: var(--accent-ink);
+		box-shadow: 0 0 0 2px var(--outline);
 	}
 	.btn {
-		@apply inline-flex h-12 items-center justify-center gap-2 px-5 font-bold select-none disabled:opacity-50;
+		@apply inline-flex h-12 items-center justify-center gap-2 px-5 text-center leading-tight font-bold select-none disabled:opacity-50;
 		border-radius: var(--radius-xl);
 		border: 2.5px solid var(--outline);
 		box-shadow:
@@ -224,5 +312,16 @@ body {
 		font-weight: 700;
 		-webkit-box-decoration-break: clone;
 		box-decoration-break: clone;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		transition-duration: 0.01ms !important;
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		scroll-behavior: auto !important;
 	}
 }

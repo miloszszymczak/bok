@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Icon from './Icon.svelte';
 	import { goto } from '$app/navigation';
 	import { m } from '#lib/paraglide/messages.js';
 	import { STATUS_ORDER, statusLabel, statusTone, type Status } from '#lib/utils/reading.ts';
@@ -36,10 +37,10 @@
 	</button>
 	{#if open}
 		<button type="button" class="fixed inset-0 z-40 cursor-default" aria-label={m.common_close()} onclick={() => (open = false)}></button>
-		<div class="absolute right-0 z-50 mt-1 w-48 overflow-hidden rounded-xl border border-line bg-surface shadow-lg" role="menu">
+		<div class="absolute right-0 z-50 mt-1 w-48 popover" role="menu">
 			{#each STATUS_ORDER as s (s)}
 				<button type="button" role="menuitem" class="flex w-full items-center justify-between px-3 py-2.5 text-left text-sm hover:bg-line/40 {status === s ? 'font-semibold' : ''}" onclick={() => choose(s)}>
-					{statusLabel(s)}{#if status === s}<span class="text-accent">✓</span>{/if}
+					{statusLabel(s)}{#if status === s}<Icon name="check" size={16} class="text-accent" />{/if}
 				</button>
 			{/each}
 			{#if status}

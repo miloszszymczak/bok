@@ -2,6 +2,7 @@ import { foldText, slugify } from '@bok/core';
 import { editions, readingStates, series, tags, userWorkTags, works, workSeries, type Db } from '@bok/db';
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import type { Storage } from './storage.ts';
+import { mediaUrls } from './media.ts';
 
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
@@ -30,7 +31,7 @@ export async function linkSeries(tx: Tx | Db, workId: string, name: string | nul
 
 export function createTagging(deps: { db: Db; storage: Storage }) {
 	const { db, storage } = deps;
-	const cover = (key: string | null, src: string | null) => (key ? storage.url(`${key}-s.webp`) : src);
+	const { cover } = mediaUrls(storage);
 
 	const api = {
 		/** Tags I use, most used first (library/log filters). */

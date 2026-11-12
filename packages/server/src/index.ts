@@ -23,6 +23,8 @@ import { createStorage } from './storage.ts';
 import { createValkey } from './valkey.ts';
 
 export * from './config.ts';
+export * from './errors.ts';
+export * from './media.ts';
 export * from './log.ts';
 export * from './valkey.ts';
 export * from './storage.ts';

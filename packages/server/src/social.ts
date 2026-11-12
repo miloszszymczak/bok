@@ -4,7 +4,8 @@ import { and, desc, eq, or, sql } from 'drizzle-orm';
 import type { Kv } from './valkey.ts';
 import type { Notifications } from './notifications.ts';
 import type { Storage } from './storage.ts';
-import { Forbidden, NotFound } from './shelves.ts';
+import { mediaUrls } from './media.ts';
+import { Forbidden, NotFound } from './errors.ts';
 
 export interface Relationship {
 	self: boolean;
@@ -31,7 +32,7 @@ export type ReportTarget = 'profile' | 'post' | 'comment' | 'readlist';
 
 export function createSocial(deps: { db: Db; kv: Kv; storage: Storage; notifications: Notifications }) {
 	const { db, kv, storage, notifications } = deps;
-	const avatar = (k: string | null) => (k ? storage.url(k) : null);
+	const { avatar } = mediaUrls(storage);
 
 	/** Visible to others: not hidden, suspended or being deleted. */
 	const visibleProfile = sql`${profiles.hiddenAt} is null and ${profiles.suspendedAt} is null and ${profiles.deletionRequestedAt} is null`;
@@ -62,8 +63,8 @@ export function createSocial(deps: { db: Db; kv: Kv; storage: Storage; notificat
 		if (viewerId === ownerId) throw new Forbidden();
 		const rel = await relationship(viewerId, ownerId);
 		if (rel.blocked !== 'none') throw new Forbidden();
-		const target = await db.query.profiles.findFirst({ where: eq(profiles.userId, ownerId), columns: { hiddenAt: true, suspendedAt: true } });
-		if (!target || target.hiddenAt || target.suspendedAt) throw new NotFound();
+		const target = await db.query.profiles.findFirst({ where: eq(profiles.userId, ownerId), columns: { hiddenAt: true, suspendedAt: true, deletionRequestedAt: true } });
+		if (!target || target.hiddenAt || target.suspendedAt || target.deletionRequestedAt) throw new NotFound();
 		return rel;
 	}
 

@@ -2,8 +2,9 @@ import { isIsoDate, LOAN_NAME_MAX, localDate, localHour, reminderFor, REMINDER_H
 import { copies, householdMembers, loans, profiles, type Db } from '@bok/db';
 import { and, eq, sql } from 'drizzle-orm';
 import type { Notifications, NotificationType } from './notifications.ts';
-import { Forbidden, NotFound } from './shelves.ts';
+import { Forbidden, NotFound } from './errors.ts';
 import type { Storage } from './storage.ts';
+import { mediaUrls } from './media.ts';
 
 /** Expected refusals (bad input, wrong state) — the web layer turns these into 400/409. */
 export class LoanError extends Error {
@@ -74,8 +75,7 @@ type Row = {
 
 export function createLoans(deps: { db: Db; storage: Storage; notifications: Notifications }) {
 	const { db, storage, notifications } = deps;
-	const avatar = (k: string | null) => (k ? storage.url(k) : null);
-	const cover = (key: string | null, src: string | null) => (key ? storage.url(`${key}-s.webp`) : src);
+	const { avatar, cover } = mediaUrls(storage);
 
 	const select = (where: ReturnType<typeof sql>, order = sql`l.updated_at desc`, limit = 200) => sql`
 		select l.id, l.status, l.copy_id, l.work_id, l.edition_id, l.lender_id, l.lender_name, l.borrower_id, l.borrower_name,

@@ -25,8 +25,14 @@ export const config: ServerConfig = {
 
 let pending: Promise<Services> | null = null;
 
-/** Lazily created so `vite build` (which imports server code) never connects anywhere. */
+/**
+ * Lazily created so `vite build` (which imports server code) never connects anywhere.
+ * A failed start (database or Valkey not up yet) is not cached: the next request tries again.
+ */
 export function services(): Promise<Services> {
-	pending ??= createServices(config, 'web', { adminEmails: env.ADMIN_EMAILS });
+	pending ??= createServices(config, 'web', { adminEmails: env.ADMIN_EMAILS }).catch((e) => {
+		pending = null;
+		throw e;
+	});
 	return pending;
 }

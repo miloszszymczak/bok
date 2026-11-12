@@ -3,7 +3,8 @@ import { readlistItems, readlists, readlistSaves, works, type Db } from '@bok/db
 import { and, asc, desc, eq, gt, sql } from 'drizzle-orm';
 import type { Notifications } from './notifications.ts';
 import type { Storage } from './storage.ts';
-import { Forbidden, NotFound } from './shelves.ts';
+import { mediaUrls } from './media.ts';
+import { Forbidden, NotFound } from './errors.ts';
 
 export type ListVisibility = 'private' | 'unlisted' | 'public';
 export const LIST_VISIBILITIES: ListVisibility[] = ['private', 'unlisted', 'public'];
@@ -26,7 +27,7 @@ export interface ListItem {
 
 export function createReadlists(deps: { db: Db; storage: Storage; notifications: Notifications }) {
 	const { db, storage, notifications } = deps;
-	const cover = (key: string | null, src: string | null, size: 's' | 'm' = 's') => (key ? storage.url(`${key}-${size}.webp`) : src);
+	const { cover } = mediaUrls(storage);
 
 	async function owned(userId: string, listId: string) {
 		const l = await db.query.readlists.findFirst({ where: eq(readlists.id, listId) });

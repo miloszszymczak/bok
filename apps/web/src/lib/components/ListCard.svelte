@@ -27,7 +27,7 @@
 	<div class="min-w-0 flex-1">
 		<p class="truncate font-serif text-lg font-semibold">{list.title}</p>
 		<p class="truncate text-sm text-muted">
-			{booksText(list.count)}{#if showOwner} · {list.ownerName}{/if}{#if showVisibility} · {list.visibility === 'public' ? m.list_vis_public() : list.visibility === 'unlisted' ? m.list_vis_unlisted() : m.list_vis_private()}{/if}
+			{booksText(list.count)}{#if showOwner}{' · '}{list.ownerName}{/if}{#if showVisibility}{' · '}{list.visibility === 'public' ? m.list_vis_public() : list.visibility === 'unlisted' ? m.list_vis_unlisted() : m.list_vis_private()}{/if}
 		</p>
 		{#if list.description}<p class="truncate text-xs text-muted">{list.description}</p>{/if}
 	</div>

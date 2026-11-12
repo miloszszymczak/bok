@@ -136,7 +136,7 @@
 	{#if items.length}
 		<ul class="card divide-y divide-line/60" bind:this={listEl} data-testid="list-items">
 			{#each items as it, i (it.id)}
-				<li class="flex items-start gap-2 bg-surface p-2.5 {dragId === it.id ? 'relative z-10 shadow-lg ring-2 ring-accent' : ''}" data-item={it.id} data-title={it.title}>
+				<li class="flex items-start gap-2 bg-surface p-2.5 {dragId === it.id ? 'relative z-10 shadow-[4px_4px_0_var(--outline)] ring-2 ring-outline' : ''}" data-item={it.id} data-title={it.title}>
 					<button class="mt-3 grid h-10 w-7 shrink-0 cursor-grab touch-none place-items-center text-muted active:cursor-grabbing" onpointerdown={(e) => dragStart(e, it.id)} aria-label={m.lists_drag()} data-testid="drag">
 						<svg width="12" height="20" viewBox="0 0 12 20" aria-hidden="true"><g fill="currentColor">{#each [3, 10, 17] as y (y)}<circle cx="3" cy={y} r="1.6" /><circle cx="9" cy={y} r="1.6" />{/each}</g></svg>
 					</button>

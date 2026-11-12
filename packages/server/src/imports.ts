@@ -8,7 +8,7 @@ import type { Notifications } from './notifications.ts';
 import { QUEUES, type Queue } from './queue.ts';
 import type { Reading } from './reading.ts';
 import type { Readlists } from './readlists.ts';
-import { Forbidden, NotFound } from './shelves.ts';
+import { Forbidden, NotFound } from './errors.ts';
 import type { Tagging } from './tagging.ts';
 import { log } from './log.ts';
 

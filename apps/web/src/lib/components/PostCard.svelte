@@ -2,6 +2,7 @@
 	import { goto, invalidateAll } from '$app/navigation';
 	import { toEditable } from '@bok/core';
 	import Composer from './Composer.svelte';
+	import Icon from './Icon.svelte';
 	import PostBody from './PostBody.svelte';
 	import ReportDialog from './ReportDialog.svelte';
 	import { m } from '#lib/paraglide/messages.js';
@@ -18,7 +19,15 @@
 	let editing = $state(false);
 	let reporting = $state(false);
 	let deleted = $state(false);
-	const visIcon = $derived(post.visibility === 'public' ? '🌍' : post.visibility === 'followers' ? '👥' : post.visibility === 'friends' ? '🤝' : '🔒');
+	const vis = $derived(
+		post.visibility === 'public'
+			? ({ icon: 'globe', label: m.visibility_public() } as const)
+			: post.visibility === 'followers'
+				? ({ icon: 'users', label: m.visibility_followers() } as const)
+				: post.visibility === 'friends'
+					? ({ icon: 'friends', label: m.visibility_friends() } as const)
+					: ({ icon: 'lock', label: m.visibility_private() } as const)
+	);
 
 	async function toggleLike() {
 		if (!signedIn) return goto(`/auth/sign-in?next=/p/${post.id}`);
@@ -51,15 +60,15 @@
 			<div class="min-w-0 flex-1 leading-tight">
 				<a href="/u/{post.author.handle}" class="font-semibold">{post.author.displayName}</a>
 				<p class="text-xs text-muted">
-					<a href="/p/{post.id}" class="hover:underline">{ago(post.createdAt)}</a>{#if post.editedAt} · {m.post_edited()}{/if} · <span title={post.visibility}>{visIcon}</span>
+					<a href="/p/{post.id}" class="hover:underline">{ago(post.createdAt)}</a>{#if post.editedAt} · {m.post_edited()}{/if} · <span class="inline-block align-[-2px]" title={vis.label}><Icon name={vis.icon} size={13} /><span class="sr-only">{vis.label}</span></span>
 				</p>
 			</div>
 			{#if signedIn}
 				<div class="relative">
-					<button class="grid size-9 place-items-center rounded-full text-muted hover:bg-line/50" onclick={() => (menu = !menu)} aria-label={m.social_more()} data-testid="post-menu">⋯</button>
+					<button class="grid size-9 place-items-center rounded-full text-muted hover:bg-line/50" onclick={() => (menu = !menu)} aria-label={m.social_more()} aria-expanded={menu} data-testid="post-menu"><Icon name="more" /></button>
 					{#if menu}
 						<button class="fixed inset-0 z-40 cursor-default" aria-label={m.common_close()} onclick={() => (menu = false)}></button>
-						<div class="absolute right-0 z-50 mt-1 w-44 overflow-hidden rounded-xl border border-line bg-surface shadow-lg" role="menu">
+						<div class="absolute right-0 z-50 mt-1 w-44 popover" role="menu">
 							{#if post.isMine}
 								<button role="menuitem" class="w-full px-4 py-2.5 text-left text-sm" onclick={() => ((menu = false), (editing = true))}>{m.book_edit()}</button>
 								<button role="menuitem" class="w-full border-t border-line px-4 py-2.5 text-left text-sm text-danger" onclick={remove}>{m.shelves_delete()}</button>
@@ -91,20 +100,20 @@
 					}}
 				/>
 			{:else if post.spoiler && !open}
-				<button class="w-full rounded-xl bg-bg p-4 text-sm text-muted" onclick={() => (open = true)} data-testid="post-spoiler">⚠ {m.spoiler_show()}</button>
+				<button class="w-full rounded-xl bg-bg p-4 text-sm text-muted" onclick={() => (open = true)} data-testid="post-spoiler"><Icon name="alert" size={16} class="mr-1 inline align-[-3px]" />{m.spoiler_show()}</button>
 			{:else}
 				<PostBody nodes={post.nodes} books={post.books} />
 			{/if}
 		</div>
 
-		<footer class="mt-3 flex items-center gap-4 text-sm text-muted">
-			<button class="flex items-center gap-1.5 {liked ? 'text-danger' : ''}" onclick={toggleLike} aria-pressed={liked} aria-label={m.post_like()} data-testid="like">
-				<span aria-hidden="true">{liked ? '♥' : '♡'}</span><span data-testid="like-count">{likes}</span>
+		<footer class="mt-3 flex items-center gap-2 text-sm text-muted">
+			<button class="-my-2 -ml-2 flex h-10 items-center gap-1.5 rounded-lg px-2 font-semibold hover:bg-accent-soft {liked ? 'text-danger' : ''}" onclick={toggleLike} aria-pressed={liked} aria-label={m.post_like()} data-testid="like">
+				<Icon name="heart" size={18} class={liked ? 'fill-current' : ''} /><span data-testid="like-count">{likes}</span>
 			</button>
 			{#if link}
-				<a href="/p/{post.id}" class="flex items-center gap-1.5" data-testid="comments-link"><span aria-hidden="true">💬</span>{post.comments}</a>
+				<a href="/p/{post.id}" class="-my-2 flex h-10 items-center gap-1.5 rounded-lg px-2 font-semibold hover:bg-accent-soft" data-testid="comments-link" aria-label={m.comments_title()}><Icon name="comment" size={18} />{post.comments}</a>
 			{:else}
-				<span class="flex items-center gap-1.5"><span aria-hidden="true">💬</span>{post.comments}</span>
+				<span class="flex items-center gap-1.5 px-2 font-semibold"><Icon name="comment" size={18} />{post.comments}</span>
 			{/if}
 		</footer>
 	</article>

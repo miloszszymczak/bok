@@ -44,10 +44,10 @@
 			<a href="/settings" class="grid size-10 place-items-center rounded-full hover:bg-line/50" aria-label={m.nav_settings()}><Icon name="settings" /></a>
 		{:else if data.profile}
 			<div class="relative">
-				<button class="grid size-10 place-items-center rounded-full text-xl hover:bg-line/50" onclick={() => (menu = !menu)} aria-label={m.social_more()} aria-expanded={menu} data-testid="profile-menu">⋯</button>
+				<button class="grid size-10 place-items-center rounded-full text-xl hover:bg-line/50" onclick={() => (menu = !menu)} aria-label={m.social_more()} aria-expanded={menu} data-testid="profile-menu"><Icon name="more" /></button>
 				{#if menu}
 					<button class="fixed inset-0 z-40 cursor-default" aria-label={m.common_close()} onclick={() => (menu = false)}></button>
-					<div class="absolute right-0 z-50 mt-1 w-56 overflow-hidden rounded-xl border border-line bg-surface shadow-lg" role="menu">
+					<div class="absolute right-0 z-50 mt-1 w-56 popover" role="menu">
 						{#if rel.blocked === 'by_me'}
 							<form method="POST" action="?/unblock" use:enhance={keep}><button role="menuitem" class="w-full px-4 py-3 text-left text-sm" onclick={() => (menu = false)}>{m.social_unblock()}</button></form>
 						{:else}
@@ -78,16 +78,16 @@
 	</section>
 	{#if p.bio && rel.blocked !== 'by_me'}<p class="mt-4 leading-relaxed whitespace-pre-line">{p.bio}</p>{/if}
 
-	<section class="mt-5 grid grid-cols-4 gap-2 text-center">
-		<div class="card p-2.5"><p class="font-serif text-xl font-bold">{data.stats?.total ?? '–'}</p><p class="text-[11px] text-muted">{m.profile_read()}</p></div>
-		<a href="/u/{p.handle}/followers" class="card p-2.5"><p class="font-serif text-xl font-bold" data-testid="followers-count">{data.counts.followers}</p><p class="text-[11px] text-muted">{m.profile_followers()}</p></a>
-		<a href="/u/{p.handle}/following" class="card p-2.5"><p class="font-serif text-xl font-bold">{data.counts.following}</p><p class="text-[11px] text-muted">{m.profile_following()}</p></a>
-		<a href="/u/{p.handle}/friends" class="card p-2.5"><p class="font-serif text-xl font-bold" data-testid="friends-count">{data.counts.friends}</p><p class="text-[11px] text-muted">{m.profile_friends()}</p></a>
+	<section class="card mt-5 grid grid-cols-4 divide-x-2 divide-line text-center">
+		<div class="px-1 py-3"><p class="font-serif text-xl font-bold">{data.stats?.total ?? '–'}</p><p class="text-[11px] leading-tight text-muted">{m.profile_read()}</p></div>
+		<a href="/u/{p.handle}/followers" class="px-1 py-3 hover:bg-accent-soft"><p class="font-serif text-xl font-bold" data-testid="followers-count">{data.counts.followers}</p><p class="text-[11px] leading-tight text-muted">{m.profile_followers()}</p></a>
+		<a href="/u/{p.handle}/following" class="px-1 py-3 hover:bg-accent-soft"><p class="font-serif text-xl font-bold">{data.counts.following}</p><p class="text-[11px] leading-tight text-muted">{m.profile_following()}</p></a>
+		<a href="/u/{p.handle}/friends" class="px-1 py-3 hover:bg-accent-soft"><p class="font-serif text-xl font-bold" data-testid="friends-count">{data.counts.friends}</p><p class="text-[11px] leading-tight text-muted">{m.profile_friends()}</p></a>
 	</section>
 
 	{#if p.isMe}
 		<div class="mt-5 grid grid-cols-3 gap-2">
-			<a href="/log" class="btn btn-primary h-11 px-2 text-sm" data-testid="open-log">{m.log_title()}</a>
+			<a href="/log" class="btn btn-primary h-11 px-2 text-sm" data-testid="open-log">{m.profile_open_log()}</a>
 			<a href="/people" class="btn btn-secondary h-11 px-2 text-sm">{m.people_title()}</a>
 			<a href="/settings" class="btn btn-secondary h-11 px-2 text-sm">{m.profile_edit()}</a>
 		</div>
@@ -169,8 +169,8 @@
 				</div>
 				<p class="mt-3 px-1 text-xs text-muted">{m.stats_visible_note()}</p>
 				<div class="mt-3 grid grid-cols-2 gap-3">
-					<a href="/u/{p.handle}/stats" class="btn btn-secondary" data-testid="all-stats">{m.stats_all()}</a>
-					<a href="/u/{p.handle}/year/{data.year}" class="btn btn-secondary" data-testid="year-review">{m.year_open({ year: data.year })}</a>
+					<a href="/u/{p.handle}/stats" class="btn btn-secondary h-11 px-3 text-sm" data-testid="all-stats">{m.stats_all()}</a>
+					<a href="/u/{p.handle}/year/{data.year}" class="btn btn-secondary h-11 px-3 text-sm" data-testid="year-review">{m.year_open({ year: data.year })}</a>
 				</div>
 			{:else if data.tab === 'readlists'}
 				<div class="space-y-3" data-testid="profile-lists">

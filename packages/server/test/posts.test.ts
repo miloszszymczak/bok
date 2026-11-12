@@ -187,6 +187,23 @@ describe.skipIf(!url)('posts & feed (integration)', () => {
 		expect(seen).toEqual(f.items.map((i) => i.key));
 	});
 
+	it('feed pagination keeps rows created within the same millisecond', async () => {
+		const made: string[] = [];
+		for (const us of ['100', '500', '900']) {
+			const id = await postsSvc.create(ids.author!, { body: `wpis ${us}` });
+			await db.execute(sql`update posts set created_at = ${`2026-05-01T10:00:00.123${us}Z`}::timestamptz where id = ${id}`);
+			made.push(id);
+		}
+		const seen: string[] = [];
+		let cursor: string | null = null;
+		do {
+			const page = await postsSvc.feed(ids.author!, cursor, 1);
+			seen.push(...page.items.map((i) => i.key));
+			cursor = page.next;
+		} while (cursor);
+		expect(seen).toEqual(made.reverse().map((id) => `post:${id}`));
+	});
+
 	it('likes, blocks and moderation', async () => {
 		const id = await postsSvc.create(ids.author!, { body: 'lubisz?' });
 		await postsSvc.like(ids.stranger!, 'post', id);
