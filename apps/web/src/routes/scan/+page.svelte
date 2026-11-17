@@ -526,7 +526,7 @@
 
 		<!-- Mode switch -->
 		{#if !inv && !assignTo}
-			<div class="absolute inset-x-0 bottom-6 flex justify-center">
+			<div class="absolute inset-x-0 bottom-9 flex justify-center">
 				<div class="flex rounded-full bg-black/55 p-1 text-sm font-semibold text-white backdrop-blur" role="tablist">
 					<button role="tab" aria-selected={mode === 'add'} class="rounded-full px-3.5 py-2 {mode === 'add' ? 'bg-white text-black' : ''}" onclick={() => setMode('add')}>{m.scan_mode_add()}</button>
 					<button role="tab" aria-selected={mode === 'move'} class="rounded-full px-3.5 py-2 {mode === 'move' ? 'bg-white text-black' : ''}" onclick={() => setMode('move')}>{m.scan_mode_move()}</button>
@@ -537,12 +537,13 @@
 	</div>
 
 	<!-- Results -->
-	<div class="-mt-4 flex min-h-0 flex-1 flex-col rounded-t-2xl bg-bg">
+	<!-- Bottom sheet over the camera: drawn above it (z-10), rounded top with the ink outline. -->
+	<div class="relative z-10 -mt-4 flex min-h-0 flex-1 flex-col rounded-t-2xl border-t-[2.5px] border-outline bg-bg pt-4">
 		{#if notice}
-			<p class="mx-4 mt-3 rounded-lg border-2 border-outline px-3 py-2 text-sm font-bold {notice.tone === 'ok' ? 'bg-accent text-accent-ink' : 'bg-apricot text-accent-ink'}" role="status" data-testid="scan-notice">{notice.text}</p>
+			<p class="mx-4 mb-3 rounded-lg border-2 border-outline px-3 py-2 text-sm font-bold {notice.tone === 'ok' ? 'bg-accent text-accent-ink' : 'bg-apricot text-accent-ink'}" role="status" data-testid="scan-notice">{notice.text}</p>
 		{/if}
 		{#if assignTo}
-			<div class="space-y-3 px-4 pt-4" data-testid="assign-panel">
+			<div class="space-y-3 px-4" data-testid="assign-panel">
 				<div class="flex items-center gap-2">
 					<p class="min-w-0 flex-1 truncate text-sm"><span class="font-semibold">{m.scan_assign_title()}</span> <span class="text-muted">· {placeName(assignPlace) || '…'}</span></p>
 					<a href="/library/s/{assignTo}" class="btn btn-secondary h-9 px-3 text-sm">{m.common_cancel()}</a>
@@ -554,7 +555,7 @@
 				</form>
 			</div>
 		{:else if inv}
-			<div class="flex items-center gap-2 px-4 pt-4 pb-2">
+			<div class="flex items-center gap-2 px-4 pb-2">
 				<p class="min-w-0 flex-1 truncate text-sm">
 					<span class="font-semibold">{m.inventory_title()}</span>
 					<span class="text-muted">· {invPlace ? `${invPlace.containerName} ${invPlace.label}` : '…'}</span>
@@ -566,13 +567,13 @@
 				{/if}
 			</div>
 		{:else if mode !== 'check'}
-			<div class="pt-4">
+			<div>
 				<ScanTarget place={targetPlace} onpick={() => (pickerOpen = true)} onnext={nextShelf} {isLast} />
 			</div>
 			{#if mode === 'move' && !target}<p class="px-4 pb-2 text-sm text-warn">{m.scan_move_needs_target()}</p>{/if}
 		{/if}
 		{#if !inv && !assignTo}
-		<div class="flex items-center gap-2 px-4 pt-2 pb-2">
+		<div class="flex items-center gap-2 px-4 pt-1 pb-2">
 			<p class="flex-1 text-sm">
 				{#if mode !== 'check'}
 					<span class="font-semibold">{m.scan_session_count({ count: sessionAdded })}</span>
