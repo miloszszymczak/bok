@@ -5,6 +5,9 @@
 	import Icon from '#lib/components/Icon.svelte';
 	import { m } from '#lib/paraglide/messages.js';
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { normalizeShelfCode, parseIdentifier } from '@bok/core';
+	import { listenWedge } from '#lib/scanner/wedge.ts';
 	import { connectLive, disconnectLive } from '#lib/client/live.svelte.ts';
 	import type { LayoutProps } from './$types';
 
@@ -22,7 +25,24 @@
 	});
 	onMount(() => {
 		if (data.user) connectLive(data.unread);
-		return disconnectLive;
+		// A USB / Bluetooth scanner works everywhere: a book opens its page, a shelf label its shelf.
+		// (The Scan screen has its own handling.)
+		const offWedge = data.user
+			? listenWedge(async (code) => {
+					if (page.url.pathname.startsWith('/scan')) return;
+					const id = parseIdentifier(code);
+					if (id?.kind === 'isbn') return goto(`/isbn/${id.isbn13}`);
+					const label = normalizeShelfCode(code);
+					if (!label) return;
+					const res = await fetch(`/api/v1/shelf-codes?code=${encodeURIComponent(label)}`).catch(() => null);
+					const sectionId = res?.ok ? ((await res.json()) as { sectionId: string | null }).sectionId : null;
+					if (sectionId) await goto(`/library/s/${sectionId}`);
+				})
+			: () => {};
+		return () => {
+			offWedge();
+			disconnectLive();
+		};
 	});
 	let resend = $state<'idle' | 'sending' | 'sent' | 'failed'>('idle');
 	async function resendVerification() {
@@ -38,11 +58,11 @@
 </svelte:head>
 
 {#if data.profile?.deletionRequestedAt}
-	<div class="bg-danger px-4 py-2 text-center text-sm text-white">
+	<div class="bg-danger px-4 py-2 text-center text-sm text-white print:hidden">
 		{m.deletion_banner()} <a href="/settings#danger" class="font-semibold underline">{m.deletion_banner_cta()}</a>
 	</div>
 {:else if data.user && !data.user.emailVerified && !page.url.pathname.startsWith('/auth')}
-	<div class="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 bg-accent-soft px-4 py-2 text-center text-sm" data-testid="verify-banner">
+	<div class="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 bg-accent-soft px-4 py-2 text-center text-sm print:hidden" data-testid="verify-banner">
 		<span class="flex items-center gap-2"><Icon name="mail" size={16} />{m.verify_banner()}</span>
 		{#if resend === 'sent'}
 			<span class="font-bold text-accent" role="status">{m.verify_sent()}</span>

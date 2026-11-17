@@ -22,7 +22,7 @@
 		"release": "./scripts/release.sh",
 		"test:db": "TEST_DATABASE_URL=postgres://bok:bok@localhost:5432/bok_test vitest run --no-file-parallelism packages/server",
 		"test:coverage": "TEST_DATABASE_URL=postgres://bok:bok@localhost:5432/bok_test vitest run --no-file-parallelism --coverage --coverage.include='packages/*/src/**' packages",
-		"test:e2e": "node apps/web/e2e/scan.e2e.mjs && ENGINE=zxing node apps/web/e2e/scan.e2e.mjs && node apps/web/e2e/manual.e2e.mjs && node apps/web/e2e/shelves.e2e.mjs && node apps/web/e2e/reading.e2e.mjs && node apps/web/e2e/social.e2e.mjs && node apps/web/e2e/readlists.e2e.mjs && node apps/web/e2e/posts.e2e.mjs && node apps/web/e2e/loans.e2e.mjs && node apps/web/e2e/import.e2e.mjs"
+		"test:e2e": "node apps/web/e2e/scan.e2e.mjs && ENGINE=zxing node apps/web/e2e/scan.e2e.mjs && node apps/web/e2e/manual.e2e.mjs && node apps/web/e2e/shelves.e2e.mjs && node apps/web/e2e/labels.e2e.mjs && node apps/web/e2e/reading.e2e.mjs && node apps/web/e2e/social.e2e.mjs && node apps/web/e2e/readlists.e2e.mjs && node apps/web/e2e/posts.e2e.mjs && node apps/web/e2e/loans.e2e.mjs && node apps/web/e2e/import.e2e.mjs"
 	},
 	"devDependencies": {
 		"@types/node": "^24",

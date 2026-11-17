@@ -151,6 +151,32 @@ describe.skipIf(!url)('shelves (integration)', () => {
 		await expect(shelves.leave(bob, (await shelves.tree(bob)).householdId)).rejects.toThrow(); // last household
 	});
 
+	it('shelf labels: generated once, assigned by scan, unique per household, found by code', async () => {
+		const room = await shelves.createLocation(alice, 'Gabinet');
+		const id = await shelves.createContainer(alice, room, 'Regał', setShelfCount(defaultLayout(1, 1, { width: 80, height: 200 }), 0, 3));
+		const secs = (await shelves.tree(alice)).locations.find((l) => l.id === room)!.containers.find((c) => c.id === id)!.sections;
+		expect(secs.every((s) => s.code === null)).toBe(true);
+		const first = await shelves.labels(alice, { containerId: id });
+		expect(first).toHaveLength(secs.length);
+		expect(first.every((l) => /^BOK-[0-9A-Z]{6}$/.test(l.code) && l.containerName === 'Regał')).toBe(true);
+		expect(new Set(first.map((l) => l.code)).size).toBe(first.length);
+		// Reprinting keeps the same codes.
+		expect((await shelves.labels(alice, { containerId: id })).map((l) => l.code)).toEqual(first.map((l) => l.code));
+		const [a, b] = secs;
+		expect(await shelves.findByCode(alice, first[0]!.code.toLowerCase())).toBe(first[0]!.sectionId);
+		// An existing sticker: normalized, books refused, taken codes reported with their place.
+		expect(await shelves.setSectionCode(alice, a!.id, ' shelf-7 ')).toEqual({ ok: true, code: 'SHELF-7' });
+		expect(await shelves.setSectionCode(alice, b!.id, '9788375780635')).toEqual({ ok: false, reason: 'invalid' });
+		const taken = await shelves.setSectionCode(alice, b!.id, 'SHELF-7');
+		expect(taken).toMatchObject({ ok: false, reason: 'taken', sectionId: a!.id, place: { containerName: 'Regał' } });
+		expect(await shelves.findByCode(alice, 'Shelf-7')).toBe(a!.id);
+		// Other households can't see or use it.
+		expect(await shelves.findByCode(bob, 'SHELF-7')).toBeNull();
+		await expect(shelves.setSectionCode(bob, a!.id, 'X-1')).rejects.toThrow();
+		expect(await shelves.setSectionCode(alice, a!.id, null)).toEqual({ ok: true, code: null });
+		expect(await shelves.findByCode(alice, 'SHELF-7')).toBeNull();
+	});
+
 	it('deleting a room leaves its books Unsorted', async () => {
 		const { room } = await bookcase();
 		const a1 = (await shelves.tree(alice)).locations[0]!.containers[0]!.sections[0]!;

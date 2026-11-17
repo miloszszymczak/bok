@@ -1,4 +1,4 @@
-import { autoLabel, cellsOf, compareCells, normalizeLayout, type Layout } from '@bok/core';
+import { autoLabel, cellsOf, compareCells, newShelfCode, normalizeLayout, normalizeShelfCode, type Layout } from '@bok/core';
 import {
 	containers,
 	copies,
@@ -30,6 +30,8 @@ export interface SectionNode {
 	h: number;
 	label: string;
 	customLabel: string | null;
+	/** Barcode on the shelf label, if any. */
+	code: string | null;
 	count: number;
 }
 export interface ContainerNode {
@@ -52,6 +54,13 @@ export interface StorageTree {
 	locations: LocationNode[];
 	unsorted: number;
 }
+
+export type ShelfCodeResult =
+	| { ok: true; code: string | null }
+	| { ok: false; reason: 'invalid' }
+	| { ok: false; reason: 'taken'; sectionId: string; place: Place | null };
+
+const pgCode = (e: unknown) => (e as { code?: string; cause?: { code?: string } }).cause?.code ?? (e as { code?: string }).code;
 
 export interface CopyRow {
 	copyId: string;
@@ -198,7 +207,7 @@ export function createShelves(deps: { db: Db; storage: Storage }) {
 			const secsBy = new Map<string, SectionNode[]>();
 			for (const s of secs.sort(compareCells)) {
 				const list = secsBy.get(s.containerId) ?? [];
-				list.push({ id: s.id, col: s.col, row: s.row, x: s.x, y: s.y, w: s.w, h: s.h, label: label(s), customLabel: s.customLabel, count: countBy.get(s.id) ?? 0 });
+				list.push({ id: s.id, col: s.col, row: s.row, x: s.x, y: s.y, w: s.w, h: s.h, label: label(s), customLabel: s.customLabel, code: s.code, count: countBy.get(s.id) ?? 0 });
 				secsBy.set(s.containerId, list);
 			}
 			return {
@@ -315,6 +324,83 @@ export function createShelves(deps: { db: Db; storage: Storage }) {
 			await db.update(sections).set({ customLabel: custom?.trim() || null }).where(eq(sections.id, id));
 		},
 
+		// ── Shelf labels (barcodes) ──
+
+		/** Stick a barcode on a shelf (null removes it). Codes are unique within a household. */
+		async setSectionCode(userId: string, sectionId: string, raw: string | null): Promise<ShelfCodeResult> {
+			const s = await getSection(userId, sectionId);
+			if (raw === null) {
+				await db.update(sections).set({ code: null }).where(eq(sections.id, sectionId));
+				return { ok: true, code: null };
+			}
+			const code = normalizeShelfCode(raw);
+			if (!code) return { ok: false, reason: 'invalid' };
+			const taken = async () => {
+				const other = await db.query.sections.findFirst({ where: and(eq(sections.householdId, s.householdId), eq(sections.code, code)), columns: { id: true } });
+				return other && other.id !== sectionId ? other.id : null;
+			};
+			let otherId = await taken();
+			if (!otherId) {
+				try {
+					await db.update(sections).set({ code }).where(eq(sections.id, sectionId));
+					return { ok: true, code };
+				} catch (e) {
+					if (pgCode(e) !== '23505') throw e;
+					otherId = await taken(); // someone else got there first
+				}
+			}
+			return { ok: false, reason: 'taken', sectionId: otherId!, place: await api.place(otherId!) };
+		},
+
+		/** The shelf with this label in any of my households (my default household first). */
+		async findByCode(userId: string, raw: string) {
+			const code = normalizeShelfCode(raw);
+			if (!code) return null;
+			const [r] = await db
+				.select({ id: sections.id })
+				.from(sections)
+				.innerJoin(householdMembers, and(eq(householdMembers.householdId, sections.householdId), eq(householdMembers.userId, userId)))
+				.where(eq(sections.code, code))
+				.orderBy(sql`${householdMembers.isDefault} desc`)
+				.limit(1);
+			return r?.id ?? null;
+		},
+
+		/**
+		 * Printable labels for one shelf, one bookcase, or the whole household. Shelves without a
+		 * code get a generated one (BOK-XXXXXX); existing codes never change, so reprints match.
+		 */
+		async labels(userId: string, scope: { sectionId?: string; containerId?: string; householdId?: string }) {
+			let where;
+			if (scope.sectionId) where = eq(sections.id, (await getSection(userId, scope.sectionId)).id);
+			else if (scope.containerId) where = eq(sections.containerId, (await getContainer(userId, scope.containerId)).id);
+			else {
+				const hh = scope.householdId ?? (await activeHousehold(userId));
+				await assertMember(userId, hh);
+				where = eq(sections.householdId, hh);
+			}
+			const rows = await db.select().from(sections).where(where);
+			for (const s of rows.filter((x) => !x.code)) {
+				for (let attempt = 0; attempt < 5 && !s.code; attempt++) {
+					const code = newShelfCode();
+					try {
+						const [u] = await db.update(sections).set({ code }).where(and(eq(sections.id, s.id), isNull(sections.code))).returning({ code: sections.code });
+						s.code = u?.code ?? (await db.query.sections.findFirst({ where: eq(sections.id, s.id), columns: { code: true } }))?.code ?? null;
+					} catch (e) {
+						if (pgCode(e) !== '23505') throw e; // collision: try another code
+					}
+				}
+			}
+			const tree = await api.tree(userId, rows[0]?.householdId);
+			const ids = new Set(rows.map((r) => r.id));
+			const codeBy = new Map(rows.map((r) => [r.id, r.code]));
+			return tree.locations.flatMap((l) =>
+				l.containers.flatMap((c) =>
+					c.sections.filter((s) => ids.has(s.id)).map((s) => ({ sectionId: s.id, code: codeBy.get(s.id)!, label: s.label, containerName: c.name, locationName: l.name }))
+				)
+			);
+		},
+
 		/** Full place of a section, for breadcrumbs. */
 		async place(sectionId: string): Promise<Place | null> {
 			const [r] = await db
@@ -346,7 +432,7 @@ export function createShelves(deps: { db: Db; storage: Storage }) {
 			]);
 			const secs = (await db.select().from(sections).where(eq(sections.containerId, s.containerId))).sort(compareCells);
 			return {
-				section: { id: s.id, label: label(s), customLabel: s.customLabel, householdId: s.householdId },
+				section: { id: s.id, label: label(s), customLabel: s.customLabel, code: s.code, householdId: s.householdId },
 				place: place!,
 				container: { id: container!.id, name: container!.name, layout: container!.layout, sections: secs.map((x) => ({ id: x.id, col: x.col, row: x.row, x: x.x, y: x.y, w: x.w, h: x.h, label: label(x) })) },
 				books

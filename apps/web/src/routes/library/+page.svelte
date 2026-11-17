@@ -118,5 +118,8 @@
 		{:else}
 			<button class="btn btn-secondary w-full" onclick={() => (adding = true)}><Icon name="plus" size={18} />{m.shelves_add_room()}</button>
 		{/if}
+		{#if data.tree.locations.some((l) => l.containers.length)}
+			<a href="/library/labels" class="btn btn-ghost mt-2 w-full"><Icon name="printer" size={18} />{m.shelves_print_all_labels()}</a>
+		{/if}
 	{/if}
 </main>

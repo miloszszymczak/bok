@@ -31,6 +31,7 @@
 		<a href="/scan?target={b.sections[0]?.id ?? ''}" class="btn btn-primary"><Icon name="scan" size={18} />{m.shelves_scan_here()}</a>
 		<a href="/library/c/{b.id}/edit" class="btn btn-secondary"><Icon name="settings" size={18} />{m.shelves_edit_layout()}</a>
 	</div>
+	<a href="/library/labels?container={b.id}" class="btn btn-ghost w-full" data-testid="bookcase-labels"><Icon name="printer" size={18} />{m.shelves_print_labels()}</a>
 
 	{#if editing}
 		<form method="POST" action="?/rename" use:enhance={() => async ({ update }) => { await update({ reset: false }); editing = false; }} class="card flex gap-2 p-3">

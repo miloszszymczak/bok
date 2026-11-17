@@ -17,7 +17,8 @@ const blank = Buffer.alloc(W * H, 235);
 const chroma = Buffer.alloc((W / 2) * (H / 2) * 2, 128);
 
 async function frameFor(code) {
-	const r = await writeBarcode(code, { format: 'EAN-13', scale: 3, addQuietZones: true });
+	// Digits are book EANs; anything else is a shelf label (Code 128, like the printed ones).
+	const r = await writeBarcode(code, { format: /^\d{13}$/.test(code) ? 'EAN-13' : 'Code128', scale: 3, addQuietZones: true });
 	if (r.error) throw new Error(r.error);
 	const png = await sharp(Buffer.from(r.svg)).resize({ width: Math.round(W * 0.7) }).flatten({ background: '#fff' }).png().toBuffer();
 	const y = await sharp({ create: { width: W, height: H, channels: 3, background: '#ebebeb' } })

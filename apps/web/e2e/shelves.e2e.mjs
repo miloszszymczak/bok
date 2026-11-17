@@ -35,9 +35,9 @@ async function newUser(name) {
 
 /** Scan by typing the code (the camera path is covered by scan.e2e). */
 async function type(page, code) {
-	if (!(await page.isVisible('input[inputmode=numeric]'))) await page.click('button:has-text("Wpisz"):visible');
-	await page.fill('input[inputmode=numeric]', code);
-	await page.press('input[inputmode=numeric]', 'Enter');
+	if (!(await page.isVisible('[data-testid=manual-code]'))) await page.click('button:has-text("Wpisz"):visible');
+	await page.fill('[data-testid=manual-code]', code);
+	await page.press('[data-testid=manual-code]', 'Enter');
 }
 const status = (page, code) => page.waitForSelector(`li[data-code="${code}"]:not([data-status=queued]):not([data-status=sending])`).then((el) => el.getAttribute('data-status'));
 

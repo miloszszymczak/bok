@@ -136,14 +136,14 @@ try {
 	await page.click('button[role=tab]:has-text("Sprawdź")');
 	await page.click('button:has-text("Wpisz"):visible');
 	for (const [code, want] of [[HOB, 'Czytane już (1×)'], [TAY, 'Na Twojej liście']]) {
-		await page.fill('input[inputmode=numeric]', code);
-		await page.press('input[inputmode=numeric]', 'Enter');
+		await page.fill('[data-testid=manual-code]', code);
+		await page.press('[data-testid=manual-code]', 'Enter');
 		await page.waitForSelector(`[data-testid=verdict-reading]:has-text("${want}")`, { timeout: 10_000 });
 		check(true, `bookstore online ${code}: ${want}`);
 	}
 	await ctx.setOffline(true);
-	await page.fill('input[inputmode=numeric]', HOB);
-	await page.press('input[inputmode=numeric]', 'Enter');
+	await page.fill('[data-testid=manual-code]', HOB);
+	await page.press('[data-testid=manual-code]', 'Enter');
 	await page.waitForSelector('[data-testid=verdict-reading]:has-text("Czytane już")', { timeout: 5000 });
 	check(true, 'bookstore offline still knows "read before" (book not owned)');
 	await page.screenshot({ path: join(out, 'bookstore-read-before.png') });

@@ -35,7 +35,8 @@ page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
 // Dev only: Vite serves fonts from /@fs/…node_modules, which the service worker can't precache
 // (builds precache them with /_app/immutable). A subset first needed while offline fails there.
 let devFontFailures = 0;
-page.on('requestfailed', (r) => /\/@fs\/.*\.woff2?$/.test(r.url()) && devFontFailures++);
+const failedUrls = [];
+page.on('requestfailed', (r) => (failedUrls.push(`${r.url()} (${r.failure()?.errorText})`), /\/@fs\/.*\.woff2?$/.test(r.url()) && devFontFailures++));
 page.on('pageerror', (e) => errors.push(e.message));
 let failed = false;
 const check = (ok, label) => {
@@ -73,8 +74,8 @@ try {
 
 	await page.click('button:has-text("Wpisz")');
 	await ctx.setOffline(true);
-	await page.fill('input[inputmode=numeric]', '9788382251586');
-	await page.press('input[inputmode=numeric]', 'Enter');
+	await page.fill('[data-testid=manual-code]', '9788382251586');
+	await page.press('[data-testid=manual-code]', 'Enter');
 	await page.waitForSelector('li[data-code="9788382251586"][data-status=queued]');
 	await page.waitForTimeout(1000);
 	check((await page.getAttribute('li[data-code="9788382251586"]', 'data-status')) === 'queued', 'offline scan stays queued');
@@ -85,9 +86,9 @@ try {
 	await page.click('button[role=tab]:has-text("Sprawdź")');
 	await ctx.setOffline(true);
 	for (const [code, want] of [[HOB, 'owned'], ['9788378865162', 'not-owned']]) {
-		await page.fill('input[inputmode=numeric]', code);
+		await page.fill('[data-testid=manual-code]', code);
 		const t = Date.now();
-		await page.press('input[inputmode=numeric]', 'Enter');
+		await page.press('[data-testid=manual-code]', 'Enter');
 		await page.waitForFunction(([c]) => document.querySelector('section[data-verdict]')?.textContent?.includes(c === '9780547928227' ? 'The Hobbit' : c), [code]);
 		const ms = Date.now() - t;
 		const v = await page.getAttribute('section[data-verdict]', 'data-verdict');
@@ -100,7 +101,7 @@ try {
 	console.error(e);
 } finally {
 	const real = errors.filter((e, i) => !(e.startsWith('Failed to load resource') && i < errors.length && devFontFailures-- > 0));
-	check(real.length === 0, `no console errors ${real.length ? JSON.stringify(real) : ''}`);
+	check(real.length === 0, `no console errors ${real.length ? JSON.stringify(real) + ' failed requests: ' + JSON.stringify(failedUrls) : ''}`);
 	console.log(`screenshots: ${out}`);
 	await browser.close();
 	process.exit(failed ? 1 : 0);

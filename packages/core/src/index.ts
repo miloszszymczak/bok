@@ -10,3 +10,4 @@ export * from './loans.ts';
 export * from './import.ts';
 export * from './stats.ts';
 export * from './push.ts';
+export * from './shelf-code.ts';

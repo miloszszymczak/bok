@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import Barcode from '#lib/components/Barcode.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import MovableBookList from '#lib/components/MovableBookList.svelte';
 	import ShelfSketch from '#lib/components/ShelfSketch.svelte';
@@ -42,6 +43,29 @@
 	{#if data.lastInventory}
 		<p class="px-1 text-xs text-muted">{m.inventory_last({ date: new Date(data.lastInventory.at).toLocaleDateString(getLocale()), missing: data.lastInventory.missing, misplaced: data.lastInventory.misplaced })}</p>
 	{/if}
+
+	<section class="card space-y-3 p-4" data-testid="shelf-label">
+		<div class="flex items-center gap-2">
+			<Icon name="tag" size={18} class="text-accent" />
+			<h2 class="flex-1 font-semibold">{m.shelf_label_title()}</h2>
+			{#if data.section.code}
+				<form method="POST" action="?/removeCode" use:enhance><button class="btn btn-ghost h-9 px-2 text-sm text-danger">{m.shelf_label_remove()}</button></form>
+			{/if}
+		</div>
+		{#if data.section.code}
+			<div class="rounded-lg border-2 border-outline bg-white p-2">
+				<Barcode value={data.section.code} height={40} class="h-12 w-full" />
+				<p class="mt-1 text-center font-mono text-xs tracking-widest text-[#2b2a24]" data-testid="shelf-code">{data.section.code}</p>
+			</div>
+			<p class="text-xs text-muted">{m.shelf_label_hint()}</p>
+		{:else}
+			<p class="text-sm text-muted">{m.shelf_label_none()}</p>
+		{/if}
+		<div class="grid grid-cols-2 gap-2">
+			<a href="/library/labels?section={data.section.id}" class="btn btn-secondary h-11 px-3 text-sm"><Icon name="printer" size={18} />{m.shelf_label_print()}</a>
+			<a href="/scan?assign={data.section.id}" class="btn btn-secondary h-11 px-3 text-sm" data-testid="assign-label"><Icon name="barcode" size={18} />{data.section.code ? m.shelf_label_change() : m.shelf_label_assign()}</a>
+		</div>
+	</section>
 
 	<MovableBookList books={data.books} tree={data.tree} current={data.section.id} />
 	{#if !data.books.length}<p class="card p-6 text-center text-sm text-muted">{m.shelves_shelf_empty()}</p>{/if}

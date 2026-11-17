@@ -20,4 +20,8 @@ export const actions: Actions = {
 		await guard(() => locals.svc.shelves.renameSection(locals.user!.id, params.id, label || null));
 		return { renamed: true };
 	},
+	removeCode: async ({ params, locals }) => {
+		await guard(() => locals.svc.shelves.setSectionCode(locals.user!.id, params.id, null));
+		return { codeRemoved: true };
+	},
 };

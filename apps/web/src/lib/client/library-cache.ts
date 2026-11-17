@@ -79,6 +79,8 @@ export async function loadTree(db: BokDb, opts: { refresh?: boolean } = {}): Pro
 export interface Place {
 	sectionId: string;
 	label: string;
+	/** Shelf label barcode (normalized), if one is assigned. */
+	code: string | null;
 	containerId: string;
 	containerName: string;
 	locationName: string;
@@ -89,7 +91,7 @@ export function orderedPlaces(tree: StorageTree | null): Place[] {
 	const out: Place[] = [];
 	for (const l of tree?.locations ?? [])
 		for (const c of l.containers)
-			for (const s of c.sections) out.push({ sectionId: s.id, label: s.label, containerId: c.id, containerName: c.name, locationName: l.name });
+			for (const s of c.sections) out.push({ sectionId: s.id, label: s.label, code: s.code ?? null, containerId: c.id, containerName: c.name, locationName: l.name });
 	return out;
 }
 

@@ -284,9 +284,11 @@ export const sections = pgTable(
 		h: real('h').notNull(),
 		/** Null = automatic label (A1, A2 … B1). */
 		customLabel: text('custom_label'),
+		/** Barcode stuck on the shelf (normalized, see @bok/core normalizeShelfCode); unique per household. */
+		code: text('code'),
 		...timestamps
 	},
-	(t) => [unique('sections_cell_uq').on(t.containerId, t.col, t.row)]
+	(t) => [unique('sections_cell_uq').on(t.containerId, t.col, t.row), unique('sections_code_uq').on(t.householdId, t.code)]
 );
 
 export const householdInvites = pgTable('household_invites', {

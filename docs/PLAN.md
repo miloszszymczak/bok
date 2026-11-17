@@ -371,6 +371,9 @@ Built as planned. Choices made: the uploaded CSV is parsed at upload and kept on
 
 ---
 
+### Shelf labels & hardware scanners  ·  S  ·  ✅ done (2026-11-17)
+Shelves can carry a barcode label (`sections.code`, unique per household, migration 0009). Labels are printed from `/library/labels` (one shelf, a bookcase or everything) as Code 128 `BOK-XXXXXX` codes generated on first print and never changed, or an existing sticker is assigned with `/scan?assign=<shelf>` (camera, scanner or typed; book barcodes refused, codes used elsewhere reported with their shelf). On the Scan screen a label switches the target shelf (add/move), saves the current inventory and starts the scanned shelf's (inventory) or opens the shelf (bookstore mode); labels are in the cached storage tree, so this works offline. Camera decoders now also read Code 128 and Code 39. USB/Bluetooth scanners in keyboard mode are detected by timing (fast keys + Enter/Tab, `lib/scanner/wedge.ts`): on the Scan screen they feed the same pipeline as the camera; elsewhere a book opens its page and a label its shelf; typing into a field is left alone. Not done: QR labels (most 1D scanners can't read them).
+
 ## 5. Later (not scheduled)
 
 Adding a whole shelf from one photo of the spines · collaborative readlists · book clubs (shared readlist + schedule + discussion) · quotes/highlights · more furniture types (boxes, piles, e-readers) · room floor plans · private profiles · native app wrappers if iOS PWA limits start to hurt (camera re-prompts, push).

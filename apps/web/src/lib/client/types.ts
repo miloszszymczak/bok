@@ -111,6 +111,7 @@ export interface TreeSection {
 	w: number;
 	h: number;
 	label: string;
+	code: string | null;
 	count: number;
 }
 export interface TreeContainer {

@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 /**
- * Barcode decoding off the main thread. Uses the native BarcodeDetector where it supports
- * EAN-13 (Android Chrome), otherwise zxing-cpp compiled to WASM (iOS Safari, desktop).
+ * Barcode decoding off the main thread: book EANs plus Code 128 / Code 39 (shelf labels).
+ * Uses the native BarcodeDetector where it supports EAN-13 (Android Chrome), otherwise zxing-cpp compiled to WASM (iOS Safari, desktop).
  * The WASM file is self-hosted (no CDN) and precached by the service worker.
  */
 import { prepareZXingModule, readBarcodes, type ReaderOptions } from 'zxing-wasm/reader';
@@ -29,7 +29,7 @@ prepareZXingModule({
 void fetch(new URL(wasmUrl, self.location.origin)).catch(() => {});
 
 const ZXING_OPTS: ReaderOptions = {
-	formats: ['EAN-13', 'EAN-8', 'UPC-A'],
+	formats: ['EAN-13', 'EAN-8', 'UPC-A', 'Code128', 'Code39'],
 	tryHarder: true,
 	tryRotate: false,
 	tryInvert: false,
@@ -51,7 +51,7 @@ async function getNative(): Promise<NativeDetector | null> {
 	if (BD) {
 		try {
 			const formats = await BD.getSupportedFormats();
-			if (formats.includes('ean_13')) native = new BD({ formats: ['ean_13', 'ean_8', 'upc_a'] });
+			if (formats.includes('ean_13')) native = new BD({ formats: ['ean_13', 'ean_8', 'upc_a', 'code_128', 'code_39'].filter((f) => formats.includes(f)) });
 		} catch {
 			/* fall back to zxing */
 		}

@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { parseIdentifier, uuidv7 } from '@bok/core';
+	import { goto, replaceState } from '$app/navigation';
+	import { looksLikeOurShelfCode, normalizeShelfCode, parseIdentifier, uuidv7 } from '@bok/core';
 	import { liveQuery } from 'dexie';
 	import Icon from '#lib/components/Icon.svelte';
 	import InventoryPanel from '#lib/components/InventoryPanel.svelte';
@@ -17,6 +18,7 @@
 	import { Scanner, bandRect, toCoverSpace } from '#lib/scanner/camera.ts';
 	import { ScanFilter } from '#lib/scanner/filter.ts';
 	import { beep, unlockAudio } from '#lib/scanner/feedback.ts';
+	import { listenWedge } from '#lib/scanner/wedge.ts';
 	import { m } from '#lib/paraglide/messages.js';
 
 	type Mode = 'add' | 'move' | 'check';
@@ -41,7 +43,12 @@
 	let manualCode = $state('');
 	let flash = $state(false);
 	let band = $state<{ x: number; y: number; w: number; h: number } | null>(null);
-	let notBook = $state(false);
+	let notice = $state<{ text: string; tone: 'ok' | 'warn' } | null>(null);
+	let noticeTimer: ReturnType<typeof setTimeout> | undefined;
+	let wedgeSeen = $state(false);
+	/** ?assign=<shelf>: the next non-book code becomes that shelf's label. */
+	let assignTo = $state<string | null>(page.url.searchParams.get('assign'));
+	let assigning = $state(false);
 	let engine = $state('');
 	const sessionStart = Date.now();
 	let tree = $state<StorageTree | null>(null);
@@ -55,6 +62,16 @@
 	const targetIndex = $derived(places.findIndex((p) => p.sectionId === target));
 	const isLast = $derived(targetIndex === places.length - 1);
 	const invPlace = $derived(inv ? (placeById.get(inv.sectionId) ?? null) : null);
+	const assignPlace = $derived(assignTo ? (placeById.get(assignTo) ?? null) : null);
+	/** Shelf labels on this device (works offline): normalized code → shelf. */
+	const shelfByCode = $derived(new Map(places.filter((p) => p.code).map((p) => [p.code!, p.sectionId])));
+	const placeName = (p: { containerName: string; label: string } | null | undefined) => (p ? `${p.containerName} ${p.label}` : '');
+
+	function showNotice(text: string, tone: 'ok' | 'warn') {
+		notice = { text, tone };
+		clearTimeout(noticeTimer);
+		noticeTimer = setTimeout(() => (notice = null), 2200);
+	}
 
 	function placeOf(id: string | null | undefined) {
 		if (!id) return m.shelves_unsorted();
@@ -83,7 +100,7 @@
 
 	const sessionAdded = $derived(scans.filter((s) => s.status === 'added' && s.scannedAt >= sessionStart).length);
 	const pendingCount = $derived(scans.filter((s) => s.status === 'queued' || s.status === 'sending' || s.status === 'undo_queued').length);
-	const manualValid = $derived(!!parseIdentifier(manualCode));
+	const manualValid = $derived(!!parseIdentifier(manualCode) || !!normalizeShelfCode(manualCode));
 
 	function readMode(): Mode {
 		try {
@@ -162,10 +179,17 @@
 			/* ignore */
 		}
 		if (granted) void startCamera();
+		// USB / Bluetooth scanners (keyboard mode) feed the same pipeline as the camera.
+		const offWedge = listenWedge((code) => {
+			wedgeSeen = true;
+			accept(code, null, 'wedge');
+		});
 		// Auto-started cameras have no user gesture yet: unlock the beep on the first tap anywhere.
 		addEventListener('pointerdown', unlockAudio, { once: true });
 
 		return () => {
+			offWedge();
+			clearTimeout(noticeTimer);
 			sub.unsubscribe();
 			queue.destroy();
 			scanner?.stop();
@@ -225,28 +249,118 @@
 
 	function onCode(raw: string, addon: string | null) {
 		const accepted = filter.push(raw, performance.now());
-		if (!accepted) return;
-		const id = parseIdentifier(accepted, addon ?? undefined);
-		if (!id || id.kind === 'ean') {
-			// A product barcode, not a book: tell the user once, don't record it.
-			notBook = true;
-			setTimeout(() => (notBook = false), 1800);
-			beep('warn');
-			return;
-		}
-		const code = id.kind === 'isbn' ? id.isbn13 : id.issn;
+		if (accepted) accept(accepted, addon, 'camera');
+	}
+
+	function flashBand() {
 		flash = true;
 		setTimeout(() => (flash = false), 180);
-		route(code, id.kind === 'issn' ? id.issue : null, true);
+	}
+
+	/** Every code — camera, hardware scanner or typed — ends up here: shelf label, book, or neither. */
+	function accept(raw: string, addon: string | null, source: 'camera' | 'wedge' | 'manual') {
+		const feedback = source !== 'manual';
+		if (assignTo) {
+			void assignLabel(raw, feedback);
+			return;
+		}
+		const label = normalizeShelfCode(raw);
+		const shelf = label ? shelfByCode.get(label) : undefined;
+		if (shelf) {
+			flashBand();
+			if (feedback) beep('ok');
+			void switchShelf(shelf);
+			return;
+		}
+		const id = parseIdentifier(raw, addon ?? undefined);
+		if (!id || id.kind === 'ean') {
+			void unknownCode(raw, feedback);
+			return;
+		}
+		flashBand();
+		route(id.kind === 'isbn' ? id.isbn13 : id.issn, id.kind === 'issn' ? id.issue : null, feedback);
+	}
+
+	/** Not a book and not a label we know on this device: maybe a label assigned elsewhere. */
+	async function unknownCode(raw: string, feedback: boolean) {
+		const label = normalizeShelfCode(raw);
+		if (label && navigator.onLine) {
+			const res = await fetch(`/api/v1/shelf-codes?code=${encodeURIComponent(label)}`).catch(() => null);
+			const sectionId = res?.ok ? ((await res.json()) as { sectionId: string | null }).sectionId : null;
+			if (sectionId) {
+				const t = await loadTree(db);
+				if (t) tree = t;
+				if (feedback) beep('ok');
+				void switchShelf(sectionId);
+				return;
+			}
+		}
+		// A product barcode or an unknown label: tell the user, don't record it.
+		showNotice(label && looksLikeOurShelfCode(label) ? m.scan_unknown_label() : m.scan_not_book(), 'warn');
+		if (feedback) beep('warn');
+	}
+
+	/** A shelf label was scanned: that shelf becomes the target / the inventory moves on / it opens. */
+	async function switchShelf(id: string) {
+		const name = placeName(placeById.get(id));
+		if (inv) {
+			if (inv.sectionId === id) return;
+			// Labels make shelf-by-shelf inventory hands-free: the finished shelf's report is saved.
+			if (!inv.finished && inv.ready && (inv.seen.length || inv.items.length)) await inv.finish();
+			inv = new Inventory(db, id);
+			void inv.init();
+			replaceState(`/scan?inventory=${id}`, {});
+			showNotice(m.scan_shelf_switched({ shelf: name }), 'ok');
+			return;
+		}
+		if (mode === 'check') {
+			await goto(`/library/s/${id}`);
+			return;
+		}
+		setTarget(id);
+		showNotice(m.scan_shelf_switched({ shelf: name }), 'ok');
+	}
+
+	async function assignLabel(raw: string, feedback: boolean) {
+		if (assigning || !assignTo) return;
+		const id = parseIdentifier(raw);
+		const code = normalizeShelfCode(raw);
+		if ((id && id.kind !== 'ean') || !code) {
+			showNotice(id && id.kind !== 'ean' ? m.scan_assign_book() : m.scan_unknown_label(), 'warn');
+			if (feedback) beep('warn');
+			return;
+		}
+		if (!navigator.onLine) {
+			showNotice(m.scan_assign_offline(), 'warn');
+			return;
+		}
+		assigning = true;
+		const shelf = assignTo;
+		const res = await fetch(`/api/v1/sections/${shelf}/code`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code }) }).catch(() => null);
+		assigning = false;
+		if (res?.ok) {
+			if (feedback) beep('ok');
+			flashBand();
+			showNotice(m.scan_assign_done({ shelf: placeName(assignPlace) }), 'ok');
+			const t = await loadTree(db);
+			if (t) tree = t;
+			setTimeout(() => void goto(`/library/s/${shelf}`), 900);
+			return;
+		}
+		if (feedback) beep('warn');
+		if (res?.status === 409) {
+			const r = (await res.json()) as { place: { containerName: string; label: string } | null };
+			showNotice(m.scan_assign_taken({ shelf: placeName(r.place) }), 'warn');
+		} else showNotice(m.scan_assign_failed(), 'warn');
 	}
 
 	/** One accepted code → the current mode's action. */
-	function route(code: string, addon: string | null, fromCamera: boolean) {
+	function route(code: string, addon: string | null, feedback: boolean) {
 		if (inv) {
-			void inv.scan(code).then((r) => fromCamera && beep(r === 'confirmed' ? 'ok' : 'warn'));
+			void inv.scan(code).then((r) => feedback && beep(r === 'confirmed' ? 'ok' : 'warn'));
 			return;
 		}
-		if (fromCamera) beep('ok');
+		if (feedback) beep('ok');
 		if (mode === 'add') void queue.enqueue(code, addon, { kind: 'add', sectionId: target });
 		else if (mode === 'move' && target) void queue.enqueue(code, addon, { kind: 'move', sectionId: target });
 		else void check(code);
@@ -329,9 +443,8 @@
 
 	function submitManual(e: SubmitEvent) {
 		e.preventDefault();
-		const id = parseIdentifier(manualCode);
-		if (!id || id.kind === 'ean') return;
-		route(id.kind === 'isbn' ? id.isbn13 : id.issn, null, false);
+		if (!manualValid) return;
+		accept(manualCode.trim(), null, 'manual');
 		manualCode = '';
 	}
 
@@ -366,7 +479,7 @@
 				<div class="absolute inset-x-3 top-1/2 h-0.5 animate-pulse bg-red-500/80"></div>
 			</div>
 			<p class="pointer-events-none absolute inset-x-0 px-16 text-center text-sm font-medium text-white drop-shadow" style="top:{Math.max(band.y - 30, 60)}px">
-				{notBook ? m.scan_not_book() : inv ? m.inventory_aim() : mode === 'check' ? m.scan_aim_check() : mode === 'move' ? m.scan_aim_move() : m.scan_aim()}
+				{notice ? notice.text : assignTo ? m.scan_assign_aim({ shelf: placeName(assignPlace) }) : inv ? m.inventory_aim() : mode === 'check' ? m.scan_aim_check() : mode === 'move' ? m.scan_aim_move() : m.scan_aim()}
 			</p>
 		{:else}
 			<div class="absolute inset-0 grid place-items-center p-6 text-center text-white">
@@ -397,6 +510,9 @@
 			{#if !online}
 				<span class="flex items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-xs font-medium text-white"><Icon name="offline" size={14} />{m.scan_offline_badge()}</span>
 			{/if}
+			{#if wedgeSeen}
+				<span class="flex items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-xs font-medium text-white" data-testid="wedge-badge"><Icon name="barcode" size={14} />{m.scan_wedge_badge()}</span>
+			{/if}
 			<span class="flex-1"></span>
 			{#if caps.zoom}
 				<button class="grid size-11 place-items-center rounded-full text-white backdrop-blur {zoomed ? 'bg-white/90 text-black' : 'bg-black/50'}" onclick={toggleZoom} aria-pressed={zoomed} aria-label={m.scan_zoom()}>
@@ -409,7 +525,7 @@
 		</div>
 
 		<!-- Mode switch -->
-		{#if !inv}
+		{#if !inv && !assignTo}
 			<div class="absolute inset-x-0 bottom-6 flex justify-center">
 				<div class="flex rounded-full bg-black/55 p-1 text-sm font-semibold text-white backdrop-blur" role="tablist">
 					<button role="tab" aria-selected={mode === 'add'} class="rounded-full px-3.5 py-2 {mode === 'add' ? 'bg-white text-black' : ''}" onclick={() => setMode('add')}>{m.scan_mode_add()}</button>
@@ -422,7 +538,22 @@
 
 	<!-- Results -->
 	<div class="-mt-4 flex min-h-0 flex-1 flex-col rounded-t-2xl bg-bg">
-		{#if inv}
+		{#if notice}
+			<p class="mx-4 mt-3 rounded-lg border-2 border-outline px-3 py-2 text-sm font-bold {notice.tone === 'ok' ? 'bg-accent text-accent-ink' : 'bg-apricot text-accent-ink'}" role="status" data-testid="scan-notice">{notice.text}</p>
+		{/if}
+		{#if assignTo}
+			<div class="space-y-3 px-4 pt-4" data-testid="assign-panel">
+				<div class="flex items-center gap-2">
+					<p class="min-w-0 flex-1 truncate text-sm"><span class="font-semibold">{m.scan_assign_title()}</span> <span class="text-muted">· {placeName(assignPlace) || '…'}</span></p>
+					<a href="/library/s/{assignTo}" class="btn btn-secondary h-9 px-3 text-sm">{m.common_cancel()}</a>
+				</div>
+				<p class="text-sm text-muted">{m.scan_assign_hint()}</p>
+				<form class="flex gap-2" onsubmit={submitManual}>
+					<input class="input h-11 flex-1 font-mono tracking-wider" bind:value={manualCode} autocomplete="off" autocapitalize="characters" enterkeyhint="go" aria-label={m.scan_manual_label()} placeholder="BOK-…" data-testid="assign-input" />
+					<button class="btn btn-primary h-11 px-4" disabled={!normalizeShelfCode(manualCode) || assigning}>{m.common_ok()}</button>
+				</form>
+			</div>
+		{:else if inv}
 			<div class="flex items-center gap-2 px-4 pt-4 pb-2">
 				<p class="min-w-0 flex-1 truncate text-sm">
 					<span class="font-semibold">{m.inventory_title()}</span>
@@ -440,7 +571,7 @@
 			</div>
 			{#if mode === 'move' && !target}<p class="px-4 pb-2 text-sm text-warn">{m.scan_move_needs_target()}</p>{/if}
 		{/if}
-		{#if !inv}
+		{#if !inv && !assignTo}
 		<div class="flex items-center gap-2 px-4 pt-2 pb-2">
 			<p class="flex-1 text-sm">
 				{#if mode !== 'check'}
@@ -461,22 +592,25 @@
 				<button class="btn btn-secondary h-9 px-3 text-sm" onclick={() => (manualOpen = !manualOpen)} aria-expanded={manualOpen}><Icon name="keyboard" size={18} />{m.scan_type_code()}</button>
 			</div>
 		{/if}
-		{#if manualOpen}
+		{#if manualOpen && !assignTo}
 			<form class="flex gap-2 px-4 pb-3" onsubmit={submitManual}>
 				<!-- svelte-ignore a11y_autofocus -->
-				<input class="input h-11 flex-1 font-mono tracking-wider" bind:value={manualCode} inputmode="numeric" autocomplete="off" placeholder="978…" enterkeyhint="go" autofocus aria-label={m.scan_manual_label()} />
+				<input class="input h-11 flex-1 font-mono tracking-wider" bind:value={manualCode} inputmode="text" autocomplete="off" autocapitalize="characters" placeholder="978… / BOK-…" data-testid="manual-code" enterkeyhint="go" autofocus aria-label={m.scan_manual_label()} />
 				<button class="btn btn-primary h-11 px-4" disabled={!manualValid}>{inv ? m.common_ok() : mode === 'add' ? m.scan_mode_add() : mode === 'move' ? m.scan_mode_move() : m.scan_mode_check()}</button>
 			</form>
 		{/if}
 
 		<div class="min-h-0 flex-1 overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-			{#if inv}
+			{#if assignTo}
+				<!-- assign mode: nothing to list -->
+			{:else if inv}
 				<InventoryPanel {inv} label={invPlace?.label ?? ''} {placeOf} {online} />
 			{:else if mode === 'check'}
 				{#if verdict}
 					<Verdict v={verdict} onadd={addFromVerdict} adding={verdictAdding} />
 				{:else}
 					<p class="mt-6 text-center text-sm text-muted">{m.scan_check_hint()}</p>
+					<p class="mx-auto mt-2 max-w-xs text-center text-xs text-muted">{m.scan_tip_labels_check()}</p>
 				{/if}
 			{:else if scans.length}
 				<ul class="space-y-2">
@@ -495,6 +629,7 @@
 				</ul>
 			{:else}
 				<p class="mt-6 text-center text-sm text-muted">{m.scan_empty_hint()}</p>
+				<p class="mx-auto mt-2 max-w-xs text-center text-xs text-muted">{m.scan_tip_labels()}</p>
 			{/if}
 			{#if engine && page.url.searchParams.has('debug')}<p class="mt-4 text-center font-mono text-[10px] text-muted">{engine}</p>{/if}
 		</div>

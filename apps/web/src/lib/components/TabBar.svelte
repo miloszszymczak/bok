@@ -15,7 +15,7 @@
 	]);
 </script>
 
-<nav class="fixed inset-x-0 bottom-0 z-30 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]" aria-label={m.nav_label()}>
+<nav class="fixed inset-x-0 bottom-0 z-30 px-4 print:hidden pb-[max(0.75rem,env(safe-area-inset-bottom))]" aria-label={m.nav_label()}>
 	<ul class="mx-auto grid h-16 max-w-2xl grid-cols-5 rounded-xl border-[2.5px] border-outline bg-surface shadow-[4px_4px_0_var(--outline)]">
 		{#each tabs as t (t.href)}
 			{@const active = t.match(page.url.pathname)}
