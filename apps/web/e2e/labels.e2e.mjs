@@ -45,7 +45,8 @@ try {
 	await page.goto(B + '/library?view=shelves', { waitUntil: 'networkidle' });
 	await page.fill('input[name=name]', 'Gabinet');
 	await Promise.all([page.waitForURL(/\/library\/r\//), page.click('form button:has-text("Dodaj pokój")')]);
-	await Promise.all([page.waitForURL(/\/library\/c\/new/), page.click('a:has-text("Dodaj regał")')]);
+	await Promise.all([page.waitForURL(/\/library\/c\/new/), page.click('a:has-text("Dodaj miejsce")')]);
+	await Promise.all([page.waitForURL(/kind=bookcase/), page.click('[data-kind=bookcase]')]);
 	await page.waitForLoadState('networkidle');
 	await page.fill('#name', 'Regał');
 	await Promise.all([page.waitForURL(/\/library\/c\/[0-9a-f-]+$/), page.click('button:has-text("Utwórz regał")')]);

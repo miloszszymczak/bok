@@ -24,8 +24,8 @@
 			{#each data.labels as l (l.sectionId)}
 				<li class="label flex flex-col gap-1.5 rounded-lg border-2 border-dashed border-line bg-white p-3 text-[#2b2a24] print:rounded-none print:border-[#999]" data-code={l.code} data-section={l.sectionId} data-label={l.label}>
 					<div class="flex items-baseline justify-between gap-2">
-						<span class="font-serif text-2xl leading-none font-bold">{l.label}</span>
-						<span class="truncate text-xs">{l.locationName} · {l.containerName}</span>
+						<span class="truncate font-serif text-2xl leading-none font-bold">{l.label || l.containerName}</span>
+						<span class="truncate text-xs">{l.label ? `${l.locationName} · ${l.containerName}` : l.locationName}</span>
 					</div>
 					<Barcode value={l.code} height={48} class="h-14 w-full" />
 					<span class="text-center font-mono text-xs tracking-widest">{l.code}</span>

@@ -12,7 +12,8 @@
 		<Icon name="library" size={18} class="shrink-0 text-accent" />
 		<span class="min-w-0 flex-1 truncate text-sm">
 			{#if place}
-				<span class="text-muted">{`${place.locationName} › ${place.containerName} › `}</span><span class="font-bold" data-testid="target-label">{place.label}</span>
+				<!-- single compartments (pile, box, e-reader) have no label: the container is the place -->
+				<span class="text-muted">{place.label ? `${place.locationName} › ${place.containerName} › ` : `${place.locationName} › `}</span><span class="font-bold" data-testid="target-label">{place.label || place.containerName}</span>
 			{:else}
 				<span class="text-muted">{m.scan_target_none()}</span>
 			{/if}

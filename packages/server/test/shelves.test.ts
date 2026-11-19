@@ -177,6 +177,30 @@ describe.skipIf(!url)('shelves (integration)', () => {
 		expect(await shelves.findByCode(alice, 'SHELF-7')).toBeNull();
 	});
 
+	it('storage kinds: piles, boxes and e-readers are one compartment; nightstands have drawers', async () => {
+		const room = await shelves.createLocation(alice, 'Sypialnia');
+		const stand = await shelves.createContainer(alice, room, 'Szafka nocna', null, 'nightstand');
+		const pile = await shelves.createContainer(alice, room, 'Stos przy łóżku', defaultLayout(4, 4), 'pile');
+		const reader = await shelves.createContainer(alice, room, 'Kindle', null, 'ereader');
+		const loc = (await shelves.tree(alice)).locations.find((l) => l.id === room)!;
+		const byId = new Map(loc.containers.map((c) => [c.id, c]));
+		expect(byId.get(stand)!).toMatchObject({ type: 'nightstand' });
+		expect(byId.get(stand)!.sections.map((x) => x.label)).toEqual(['A1', 'A2']);
+		// A designed layout is ignored for a pile: one compartment, no label of its own.
+		expect(byId.get(pile)!.sections.map((x) => x.label)).toEqual(['']);
+		expect(byId.get(reader)!).toMatchObject({ type: 'ereader', sections: [{ label: '' }] });
+		const pileSection = byId.get(pile)!.sections[0]!.id;
+		expect(await shelves.place(pileSection)).toMatchObject({ containerName: 'Stos przy łóżku', containerType: 'pile', label: '' });
+		await expect(shelves.setLayout(alice, pile, defaultLayout(2, 2))).rejects.toThrow();
+		// Books go there like onto any shelf, and labels print with the container's name.
+		const r = await library.scanAdd({ userId: alice, clientId: uuidv7(), code: '9780547928227', sectionId: pileSection });
+		expect(r.status).toBe('added');
+		expect((await shelves.section(alice, pileSection)).books).toHaveLength(1);
+		const [lab] = await shelves.labels(alice, { sectionId: pileSection });
+		expect(lab).toMatchObject({ label: '', containerName: 'Stos przy łóżku', containerType: 'pile' });
+		await expect(shelves.createContainer(alice, room, 'X', null, 'spaceship' as never)).rejects.toThrow();
+	});
+
 	it('deleting a room leaves its books Unsorted', async () => {
 		const { room } = await bookcase();
 		const a1 = (await shelves.tree(alice)).locations[0]!.containers[0]!.sections[0]!;

@@ -4,12 +4,14 @@
 		locations: {
 			id: string;
 			name: string;
-			containers: { id: string; name: string; layout: Layout; sections: { id: string; x: number; y: number; w: number; h: number; label: string; count?: number }[] }[];
+			containers: { id: string; name: string; type?: string; layout: Layout; sections: { id: string; x: number; y: number; w: number; h: number; label: string; count?: number }[] }[];
 		}[];
 	}
 </script>
 
 <script lang="ts">
+	import { isSingleCompartment } from '@bok/core';
+	import { kindName } from '#lib/utils/storage.ts';
 	import Icon from './Icon.svelte';
 	import ShelfSketch from './ShelfSketch.svelte';
 	import { m } from '#lib/paraglide/messages.js';
@@ -52,10 +54,18 @@
 							<h3 class="section-title">{loc.name}</h3>
 							<div class="space-y-3">
 								{#each loc.containers as c (c.id)}
+									{#if isSingleCompartment(c.type) && c.sections[0]}
+										{@const s = c.sections[0]}
+										<!-- pile / box / e-reader: one tap, one place -->
+										<button class="card flex w-full items-center gap-3 p-3 text-left {s.id === current ? 'ring-2 ring-accent' : ''}" onclick={() => pick(s.id)} data-pick={s.id}>
+											<span class="w-10 shrink-0"><ShelfSketch layout={c.layout} sections={c.sections} kind={c.type} highlight={s.id === current ? [s.id] : []} title={c.name} /></span>
+											<span class="min-w-0 flex-1"><span class="block truncate font-semibold">{c.name}</span><span class="text-xs text-muted">{kindName(c.type)}</span></span>
+										</button>
+									{:else}
 									<div class="card p-3">
 										<p class="mb-2 text-sm font-semibold">{c.name}</p>
 										<div class="mx-auto max-w-xs">
-											<ShelfSketch layout={c.layout} sections={c.sections} highlight={current ? [current] : []} onpick={pick} books={false} title={c.name} />
+											<ShelfSketch layout={c.layout} sections={c.sections} kind={c.type} highlight={current ? [current] : []} onpick={pick} books={false} title={c.name} />
 										</div>
 										<div class="mt-3 flex flex-wrap gap-1.5">
 											{#each c.sections as s (s.id)}
@@ -63,6 +73,7 @@
 											{/each}
 										</div>
 									</div>
+									{/if}
 								{/each}
 							</div>
 						</section>

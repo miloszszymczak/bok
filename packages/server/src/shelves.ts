@@ -1,4 +1,4 @@
-import { autoLabel, cellsOf, compareCells, newShelfCode, normalizeLayout, normalizeShelfCode, type Layout } from '@bok/core';
+import { autoLabel, cellsOf, compareCells, isSingleCompartment, isStorageKind, kindLayout, newShelfCode, normalizeLayout, normalizeShelfCode, type Layout, type StorageKind } from '@bok/core';
 import {
 	containers,
 	copies,
@@ -79,15 +79,19 @@ export interface CopyRow {
 
 export interface Place {
 	sectionId: string;
+	/** Empty for single-compartment containers (piles, boxes, e-book readers): the container is the place. */
 	label: string;
 	containerId: string;
 	containerName: string;
+	containerType: string;
 	locationId: string;
 	locationName: string;
 }
 
 const authorsSql = sql<string[]>`coalesce((select array_agg(a.name order by wa.position) from work_authors wa join authors a on a.id = wa.author_id where wa.work_id = ${works.id}), '{}')`;
-const label = (s: { col: number; row: number; customLabel: string | null }) => s.customLabel || autoLabel(s.col, s.row);
+/** A section's label: custom, else A1, B2…; a single compartment has none (it's named by its container). */
+const label = (s: { col: number; row: number; customLabel: string | null }, kind?: string | null) =>
+	isSingleCompartment(kind) ? '' : s.customLabel || autoLabel(s.col, s.row);
 
 export function createShelves(deps: { db: Db; storage: Storage }) {
 	const { db, storage } = deps;
@@ -204,10 +208,11 @@ export function createShelves(deps: { db: Db; storage: Storage }) {
 				db.select({ n: sql<number>`count(*)::int` }).from(copies).where(and(eq(copies.householdId, hh), isNull(copies.sectionId)))
 			]);
 			const countBy = new Map(counts.map((c) => [c.sectionId!, c.n]));
+			const kindOf = new Map(conts.map((c) => [c.id, c.type]));
 			const secsBy = new Map<string, SectionNode[]>();
 			for (const s of secs.sort(compareCells)) {
 				const list = secsBy.get(s.containerId) ?? [];
-				list.push({ id: s.id, col: s.col, row: s.row, x: s.x, y: s.y, w: s.w, h: s.h, label: label(s), customLabel: s.customLabel, code: s.code, count: countBy.get(s.id) ?? 0 });
+				list.push({ id: s.id, col: s.col, row: s.row, x: s.x, y: s.y, w: s.w, h: s.h, label: label(s, kindOf.get(s.containerId)), customLabel: s.customLabel, code: s.code, count: countBy.get(s.id) ?? 0 });
 				secsBy.set(s.containerId, list);
 			}
 			return {
@@ -248,20 +253,23 @@ export function createShelves(deps: { db: Db; storage: Storage }) {
 		},
 
 		// ── Furniture ──
-		async createContainer(userId: string, locationId: string, name: string, layoutInput: unknown) {
+		async createContainer(userId: string, locationId: string, name: string, layoutInput: unknown, kind: StorageKind = 'bookcase') {
+			if (!isStorageKind(kind)) throw new Error('unknown storage kind');
 			const loc = await getLocation(userId, locationId);
-			const layout = normalizeLayout(layoutInput);
+			// Piles, boxes and e-readers are one compartment: their layout isn't designed.
+			const layout = isSingleCompartment(kind) ? kindLayout(kind) : normalizeLayout(layoutInput ?? kindLayout(kind));
 			const position = await nextPosition(containers, eq(containers.locationId, locationId));
 			return db.transaction(async (tx) => {
 				const [c] = await tx
 					.insert(containers)
-					.values({ householdId: loc.householdId, locationId, name, layout, position })
+					.values({ householdId: loc.householdId, locationId, type: kind, name, layout, position })
 					.returning({ id: containers.id, householdId: containers.householdId });
 				await syncSections(tx, c!, layout);
 				return c!.id;
 			});
 		},
 		getContainer,
+		getLocation,
 		async renameContainer(userId: string, id: string, name: string) {
 			await getContainer(userId, id);
 			await db.update(containers).set({ name }).where(eq(containers.id, id));
@@ -281,6 +289,7 @@ export function createShelves(deps: { db: Db; storage: Storage }) {
 		 */
 		async setLayout(userId: string, containerId: string, layoutInput: unknown, orphansTo?: string | null) {
 			const c = await getContainer(userId, containerId);
+			if (isSingleCompartment(c.type)) throw new Forbidden(); // one compartment, nothing to design
 			const layout = normalizeLayout(layoutInput);
 			const keep = new Set(cellsOf(layout).map((x) => `${x.col}:${x.row}`));
 			const current = await db.select().from(sections).where(eq(sections.containerId, containerId));
@@ -296,7 +305,7 @@ export function createShelves(deps: { db: Db; storage: Storage }) {
 						ok: false as const,
 						orphans: counts.map((k) => {
 							const s = removed.find((r) => r.id === k.sectionId)!;
-							return { sectionId: s.id, label: label(s), count: k.n };
+							return { sectionId: s.id, label: label(s, c.type), count: k.n };
 						})
 					};
 				}
@@ -396,7 +405,7 @@ export function createShelves(deps: { db: Db; storage: Storage }) {
 			const codeBy = new Map(rows.map((r) => [r.id, r.code]));
 			return tree.locations.flatMap((l) =>
 				l.containers.flatMap((c) =>
-					c.sections.filter((s) => ids.has(s.id)).map((s) => ({ sectionId: s.id, code: codeBy.get(s.id)!, label: s.label, containerName: c.name, locationName: l.name }))
+					c.sections.filter((s) => ids.has(s.id)).map((s) => ({ sectionId: s.id, code: codeBy.get(s.id)!, label: s.label, containerName: c.name, containerType: c.type, locationName: l.name }))
 				)
 			);
 		},
@@ -411,6 +420,7 @@ export function createShelves(deps: { db: Db; storage: Storage }) {
 					customLabel: sections.customLabel,
 					containerId: containers.id,
 					containerName: containers.name,
+					containerType: containers.type,
 					locationId: locations.id,
 					locationName: locations.name
 				})
@@ -420,7 +430,7 @@ export function createShelves(deps: { db: Db; storage: Storage }) {
 				.where(eq(sections.id, sectionId));
 			if (!r) return null;
 			const { col, row, customLabel, ...rest } = r;
-			return { ...rest, label: label({ col, row, customLabel }) };
+			return { ...rest, label: label({ col, row, customLabel }, rest.containerType) };
 		},
 
 		async section(userId: string, sectionId: string) {
@@ -432,9 +442,9 @@ export function createShelves(deps: { db: Db; storage: Storage }) {
 			]);
 			const secs = (await db.select().from(sections).where(eq(sections.containerId, s.containerId))).sort(compareCells);
 			return {
-				section: { id: s.id, label: label(s), customLabel: s.customLabel, code: s.code, householdId: s.householdId },
+				section: { id: s.id, label: label(s, container!.type), customLabel: s.customLabel, code: s.code, householdId: s.householdId },
 				place: place!,
-				container: { id: container!.id, name: container!.name, layout: container!.layout, sections: secs.map((x) => ({ id: x.id, col: x.col, row: x.row, x: x.x, y: x.y, w: x.w, h: x.h, label: label(x) })) },
+				container: { id: container!.id, name: container!.name, type: container!.type, layout: container!.layout, sections: secs.map((x) => ({ id: x.id, col: x.col, row: x.row, x: x.x, y: x.y, w: x.w, h: x.h, label: label(x, container!.type) })) },
 				books
 			};
 		},
@@ -476,6 +486,7 @@ export function createShelves(deps: { db: Db; storage: Storage }) {
 					customLabel: sections.customLabel,
 					containerId: containers.id,
 					containerName: containers.name,
+					containerType: containers.type,
 					locationId: locations.id,
 					locationName: locations.name
 				})
@@ -484,7 +495,7 @@ export function createShelves(deps: { db: Db; storage: Storage }) {
 				.innerJoin(containers, eq(containers.id, sections.containerId))
 				.innerJoin(locations, eq(locations.id, containers.locationId))
 				.where(inArray(copies.id, copyIds));
-			for (const { copyId, col, row, customLabel, ...r } of rows) out.set(copyId, { ...r, label: label({ col, row, customLabel }) });
+			for (const { copyId, col, row, customLabel, ...r } of rows) out.set(copyId, { ...r, label: label({ col, row, customLabel }, r.containerType) });
 			return out;
 		},
 
@@ -524,15 +535,15 @@ export function createShelves(deps: { db: Db; storage: Storage }) {
 
 		/** Layouts + sections of the given bookcases, for drawing "where is it" sketches. */
 		async sketches(containerIds: string[]) {
-			if (!containerIds.length) return new Map<string, { layout: Layout; sections: { id: string; x: number; y: number; w: number; h: number; label: string }[] }>();
+			if (!containerIds.length) return new Map<string, { type: string; layout: Layout; sections: { id: string; x: number; y: number; w: number; h: number; label: string }[] }>();
 			const [cs, ss] = await Promise.all([
-				db.select({ id: containers.id, layout: containers.layout }).from(containers).where(inArray(containers.id, containerIds)),
+				db.select({ id: containers.id, type: containers.type, layout: containers.layout }).from(containers).where(inArray(containers.id, containerIds)),
 				db.select().from(sections).where(inArray(sections.containerId, containerIds))
 			]);
 			return new Map(
 				cs.map((c) => [
 					c.id,
-					{ layout: c.layout, sections: ss.filter((s) => s.containerId === c.id).map((s) => ({ id: s.id, x: s.x, y: s.y, w: s.w, h: s.h, label: label(s) })) }
+					{ type: c.type, layout: c.layout, sections: ss.filter((s) => s.containerId === c.id).map((s) => ({ id: s.id, x: s.x, y: s.y, w: s.w, h: s.h, label: label(s, c.type) })) }
 				])
 			);
 		},

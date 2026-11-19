@@ -1,3 +1,4 @@
+import { placePath } from '@bok/core';
 import { foldText } from '@bok/core';
 import { copies, editions, householdMembers, works } from '@bok/db';
 import { fail, redirect } from '@sveltejs/kit';
@@ -65,7 +66,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 				status: statuses.get(r.workId) ?? null,
 				cover: coverUrl(storage, r, 's'),
 				srcset: coverSrcset(storage, r.coverKey),
-				place: p ? `${p.locationName} › ${p.containerName} › ${p.label}` : null
+				place: p ? placePath(p) : null
 			};
 		})
 	};

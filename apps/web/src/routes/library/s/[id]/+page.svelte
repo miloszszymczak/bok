@@ -5,26 +5,51 @@
 	import MovableBookList from '#lib/components/MovableBookList.svelte';
 	import ShelfSketch from '#lib/components/ShelfSketch.svelte';
 	import TopBar from '#lib/components/TopBar.svelte';
+	import { isSingleCompartment } from '@bok/core';
+	import { kindName } from '#lib/utils/storage.ts';
 	import { m } from '#lib/paraglide/messages.js';
 	import { getLocale } from '#lib/paraglide/runtime.js';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 	let renaming = $state(false);
+	let confirmDelete = $state(false);
 	const p = $derived(data.place);
+	/** A pile, box or e-reader: this page is the whole container. */
+	const single = $derived(isSingleCompartment(data.container.type));
 </script>
 
-<svelte:head><title>{p.containerName} {data.section.label} · bok</title></svelte:head>
+<svelte:head><title>{single ? p.containerName : `${p.containerName} ${data.section.label}`} · bok</title></svelte:head>
 
-<TopBar title="{m.shelves_shelf()} {data.section.label}" back="/library/c/{p.containerId}">
+<TopBar title={single ? p.containerName : `${m.shelves_shelf()} ${data.section.label}`} back={single ? `/library/r/${p.locationId}` : `/library/c/${p.containerId}`}>
 	{#snippet actions()}
 		<button class="btn btn-ghost h-10 px-3 text-sm" onclick={() => (renaming = !renaming)}><Icon name="pencil" size={18} />{m.shelves_rename()}</button>
 	{/snippet}
 </TopBar>
 <main class="page space-y-4">
-	<p class="px-1 text-sm text-muted" data-testid="breadcrumb"><a href="/library/r/{p.locationId}" class="underline">{p.locationName}</a> › <a href="/library/c/{p.containerId}" class="underline">{p.containerName}</a> › <span class="font-semibold text-ink">{data.section.label}</span></p>
+	{#if single}
+		<p class="px-1 text-sm text-muted" data-testid="breadcrumb"><a href="/library/r/{p.locationId}" class="underline">{p.locationName}</a> › <span class="font-semibold text-ink">{kindName(data.container.type)}</span></p>
+	{:else}
+		<p class="px-1 text-sm text-muted" data-testid="breadcrumb"><a href="/library/r/{p.locationId}" class="underline">{p.locationName}</a> › <a href="/library/c/{p.containerId}" class="underline">{p.containerName}</a> › <span class="font-semibold text-ink">{data.section.label}</span></p>
+	{/if}
 
-	{#if renaming}
+	{#if renaming && single}
+		<form method="POST" action="?/renameContainer" use:enhance={() => async ({ update }) => { await update({ reset: false }); renaming = false; }} class="card flex gap-2 p-3">
+			<input class="input h-11 flex-1" name="name" defaultValue={p.containerName} required maxlength="80" aria-label={m.shelves_rename()} />
+			<button class="btn btn-primary h-11 px-4">{m.common_save()}</button>
+		</form>
+		<div class="card space-y-3 p-4">
+			{#if confirmDelete}
+				<p class="text-sm">{m.storage_delete_confirm({ name: p.containerName })}</p>
+				<form method="POST" action="?/deleteContainer" class="flex gap-2">
+					<button class="btn btn-danger flex-1" data-testid="delete-storage">{m.storage_delete()}</button>
+					<button type="button" class="btn btn-secondary" onclick={() => (confirmDelete = false)}>{m.common_cancel()}</button>
+				</form>
+			{:else}
+				<button class="btn btn-ghost w-full text-danger" onclick={() => (confirmDelete = true)}>{m.storage_delete()}</button>
+			{/if}
+		</div>
+	{:else if renaming}
 		<form method="POST" action="?/rename" use:enhance={() => async ({ update }) => { await update({ reset: false }); renaming = false; }} class="card flex gap-2 p-3">
 			<input class="input h-11 flex-1" name="label" defaultValue={data.section.customLabel ?? ''} placeholder={data.section.label} maxlength="20" aria-label={m.shelves_rename()} />
 			<button class="btn btn-primary h-11 px-4">{m.common_save()}</button>
@@ -32,8 +57,8 @@
 		<p class="px-1 text-xs text-muted">{m.shelves_rename_hint()}</p>
 	{/if}
 
-	<div class="card mx-auto max-w-sm p-3">
-		<ShelfSketch layout={data.container.layout} sections={data.container.sections} highlight={[data.section.id]} title={p.containerName} books={false} />
+	<div class="card mx-auto p-3 {single ? 'w-44' : 'max-w-sm'}">
+		<ShelfSketch layout={data.container.layout} sections={single ? data.container.sections.map((s) => ({ ...s, count: data.books.length })) : data.container.sections} kind={data.container.type} highlight={single ? [] : [data.section.id]} title={p.containerName} books={false} />
 	</div>
 
 	<div class="grid grid-cols-2 gap-3">

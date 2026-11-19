@@ -1,3 +1,4 @@
+import { isSingleCompartment } from '@bok/core';
 import { error, fail, redirect } from '@sveltejs/kit';
 import { guard, UUID } from '#lib/server/api.ts';
 import { m } from '#lib/paraglide/messages.js';
@@ -8,7 +9,10 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	const c = await guard(() => locals.svc.shelves.getContainer(locals.user!.id, params.id));
 	const tree = await locals.svc.shelves.tree(locals.user!.id, c.householdId);
 	const room = tree.locations.find((l) => l.id === c.locationId)!;
-	return { room: { id: room.id, name: room.name }, bookcase: room.containers.find((x) => x.id === c.id)! };
+	const bookcase = room.containers.find((x) => x.id === c.id)!;
+	// A pile, box or e-reader is one compartment: its page is that compartment's page.
+	if (isSingleCompartment(c.type) && bookcase.sections[0]) redirect(307, `/library/s/${bookcase.sections[0].id}`);
+	return { room: { id: room.id, name: room.name }, bookcase };
 };
 
 export const actions: Actions = {

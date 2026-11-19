@@ -86,17 +86,17 @@
 					<div class="-mx-4 flex snap-x scroll-px-4 gap-3 overflow-x-auto px-4 pt-0.5 pb-2">
 						{#each loc.containers as c (c.id)}
 							<a href="/library/c/{c.id}" class="card w-40 shrink-0 snap-start p-2.5">
-								<ShelfSketch layout={c.layout} sections={c.sections} labels={false} title={c.name} />
+								<ShelfSketch layout={c.layout} sections={c.sections} kind={c.type} labels={false} title={c.name} />
 								<p class="mt-2 truncate text-sm font-semibold">{c.name}</p>
 								<p class="text-xs text-muted">{m.shelves_book_count({ count: c.count })}</p>
 							</a>
 						{/each}
 						<a href="/library/c/new?room={loc.id}" class="card grid w-28 shrink-0 snap-start place-items-center border-dashed p-3 text-center text-sm text-accent">
-							<span><Icon name="plus" class="mx-auto" />{m.shelves_add_bookcase()}</span>
+							<span><Icon name="plus" class="mx-auto" />{m.storage_add()}</span>
 						</a>
 					</div>
 				{:else}
-					<a href="/library/c/new?room={loc.id}" class="card flex items-center gap-2 border-dashed p-4 text-sm font-medium text-accent"><Icon name="plus" size={18} />{m.shelves_add_bookcase()}</a>
+					<a href="/library/c/new?room={loc.id}" class="card flex items-center gap-2 border-dashed p-4 text-sm font-medium text-accent"><Icon name="plus" size={18} />{m.storage_add()}</a>
 				{/if}
 			</section>
 		{/each}

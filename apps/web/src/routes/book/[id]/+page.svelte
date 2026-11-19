@@ -193,12 +193,12 @@
 					<div class="card p-3" data-copy={c.copyId}>
 						<div class="flex items-start gap-3">
 							{#if c.sketch && c.place}
-								<a href="/library/s/{c.place.sectionId}" class="w-28 shrink-0"><ShelfSketch layout={c.sketch.layout} sections={c.sketch.sections} highlight={[c.place.sectionId]} books={false} title={c.place.containerName} /></a>
+								<a href="/library/s/{c.place.sectionId}" class="w-28 shrink-0"><ShelfSketch layout={c.sketch.layout} sections={c.sketch.sections} kind={c.sketch.type} highlight={c.place.label ? [c.place.sectionId] : []} books={false} title={c.place.containerName} /></a>
 							{/if}
 							<div class="min-w-0 flex-1">
 								{#if c.place}
-									<p class="text-sm text-muted">{c.place.locationName} › {c.place.containerName}</p>
-									<p class="font-serif text-2xl font-bold" data-testid="where-label">{c.place.label}</p>
+									<p class="text-sm text-muted">{c.place.label ? `${c.place.locationName} › ${c.place.containerName}` : c.place.locationName}</p>
+									<p class="font-serif text-2xl font-bold" data-testid="where-label">{c.place.label || c.place.containerName}</p>
 								{:else}
 									<p class="font-semibold text-warn">{m.shelves_unsorted()}</p>
 									<p class="text-sm text-muted">{m.where_unsorted_hint()}</p>

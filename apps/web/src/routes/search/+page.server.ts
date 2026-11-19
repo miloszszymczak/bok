@@ -1,3 +1,4 @@
+import { placeName } from '@bok/core';
 import { parseIdentifier } from '@bok/core';
 import { searchOpenLibrary } from '@bok/metadata';
 import { redirect } from '@sveltejs/kit';
@@ -13,7 +14,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const hits = await catalog.search(q, 20);
 	const mine = locals.user ? await shelves.copiesOfWorks(locals.user.id, hits.map((h) => h.id)) : [];
 	const where = new Map<string, string>();
-	for (const c of mine) if (!where.has(c.workId)) where.set(c.workId, c.place ? `${c.place.containerName} ${c.place.label}` : '');
+	for (const c of mine) if (!where.has(c.workId)) where.set(c.workId, c.place ? placeName(c.place) : '');
 	const local = hits.map((r) => ({
 		owned: where.has(r.id),
 		where: where.get(r.id) ?? null,

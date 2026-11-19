@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { goto, replaceState } from '$app/navigation';
-	import { looksLikeOurShelfCode, normalizeShelfCode, parseIdentifier, uuidv7 } from '@bok/core';
+	import { looksLikeOurShelfCode, normalizeShelfCode, parseIdentifier, placeName as placeText, uuidv7 } from '@bok/core';
 	import { liveQuery } from 'dexie';
 	import Icon from '#lib/components/Icon.svelte';
 	import InventoryPanel from '#lib/components/InventoryPanel.svelte';
@@ -65,7 +65,7 @@
 	const assignPlace = $derived(assignTo ? (placeById.get(assignTo) ?? null) : null);
 	/** Shelf labels on this device (works offline): normalized code → shelf. */
 	const shelfByCode = $derived(new Map(places.filter((p) => p.code).map((p) => [p.code!, p.sectionId])));
-	const placeName = (p: { containerName: string; label: string } | null | undefined) => (p ? `${p.containerName} ${p.label}` : '');
+	const placeName = (p: { containerName: string; label: string } | null | undefined) => (p ? placeText(p) : '');
 
 	function showNotice(text: string, tone: 'ok' | 'warn') {
 		notice = { text, tone };
@@ -76,7 +76,7 @@
 	function placeOf(id: string | null | undefined) {
 		if (!id) return m.shelves_unsorted();
 		const p = placeById.get(id);
-		return p ? `${p.containerName} ${p.label}` : '…';
+		return p ? placeText(p) : '…';
 	}
 
 	function setTarget(id: string | null) {
@@ -558,7 +558,7 @@
 			<div class="flex items-center gap-2 px-4 pb-2">
 				<p class="min-w-0 flex-1 truncate text-sm">
 					<span class="font-semibold">{m.inventory_title()}</span>
-					<span class="text-muted">· {invPlace ? `${invPlace.containerName} ${invPlace.label}` : '…'}</span>
+					<span class="text-muted">· {invPlace ? placeText(invPlace) : '…'}</span>
 				</p>
 				{#if inv.finished}
 					<a href="/library/s/{inv.sectionId}" class="btn btn-secondary h-9 px-3 text-sm">{m.inventory_back()}</a>

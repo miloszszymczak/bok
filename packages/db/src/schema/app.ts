@@ -235,7 +235,7 @@ export const locations = pgTable(
 	(t) => [index('locations_household_idx').on(t.householdId, t.position)]
 );
 
-export const containerTypeEnum = pgEnum('container_type', ['bookcase', 'box', 'pile', 'other']);
+export const containerTypeEnum = pgEnum('container_type', ['bookcase', 'box', 'pile', 'other', 'nightstand', 'ereader']);
 
 export interface ContainerLayout {
 	/** Outer size in centimetres (drives the sketch's proportions). */
@@ -245,7 +245,10 @@ export interface ContainerLayout {
 	columns: { w: number; shelves: number[] }[];
 }
 
-/** A piece of furniture. Only bookcases exist today; `type` + `layout` leave room for others. */
+/**
+ * A place books live in: a bookcase or nightstand (designed layout of shelves/drawers), or a
+ * single-compartment pile, box or e-book reader (one section, fixed layout). See @bok/core storage kinds.
+ */
 export const containers = pgTable(
 	'containers',
 	{

@@ -53,7 +53,9 @@ try {
 	await page.goto(B + '/library?view=shelves', { waitUntil: 'networkidle' });
 	await page.fill('input[name=name]', 'Salon');
 	await Promise.all([page.waitForURL(/\/library\/r\//), page.click('form button:has-text("Dodaj pokój")')]);
-	await Promise.all([page.waitForURL(/\/library\/c\/new/), page.click('a:has-text("Dodaj regał")')]);
+	const roomUrl = page.url();
+	await Promise.all([page.waitForURL(/\/library\/c\/new/), page.click('a:has-text("Dodaj miejsce")')]);
+	await Promise.all([page.waitForURL(/kind=bookcase/), page.click('[data-kind=bookcase]')]);
 	await page.waitForLoadState('networkidle');
 	const t0 = Date.now();
 	let taps = 0;
@@ -177,6 +179,43 @@ try {
 	await page.waitForSelector('[role=alert]:has-text("E6")');
 	await Promise.all([page.waitForURL(bookcaseUrl), page.click('button:has-text("Przenieś do nieprzypisanych")')]);
 	check((await page.locator('svg g[role=button]').count()) === 22, 'shelf removed; its book went to Unsorted');
+
+	// ── Other kinds of storage: a nightstand, a pile, an e-book reader ──
+	const addKind = async (kind, name) => {
+		await page.goto(roomUrl, { waitUntil: 'networkidle' });
+		await Promise.all([page.waitForURL(/\/library\/c\/new/), page.click('a:has-text("Dodaj miejsce")')]);
+		await Promise.all([page.waitForURL(/kind=/), page.click(`[data-kind=${kind}]`)]);
+		await page.fill('#name', name);
+		await Promise.all([page.waitForURL(/\/library\/[cs]\/[0-9a-f-]+$/), page.click('[data-testid=create-storage]')]);
+		await page.waitForLoadState('networkidle');
+		return page.url();
+	};
+	await addKind('nightstand', 'Szafka nocna');
+	check((await page.locator('svg g[role=button]').count()) === 2, 'nightstand: a top and a drawer');
+	const pileUrl = await addKind('pile', 'Stos przy łóżku');
+	check(/\/library\/s\//.test(pileUrl) && (await page.textContent('header h1'))?.trim() === 'Stos przy łóżku' && (await page.isVisible('svg[data-kind=pile]')), 'a pile is one place, opened directly');
+	await Promise.all([page.waitForURL(/\/scan\?target=/), page.click('a:has-text("Skanuj tutaj")')]);
+	await page.waitForSelector('[data-testid=target-label]');
+	check((await page.textContent('[data-testid=target-label]'))?.trim() === 'Stos przy łóżku', 'scan target names the pile');
+	await page.click('[role=tab]:has-text("Przenieś")');
+	// Earlier moves of this book are still in the scan list: wait for a new one.
+	const movedBefore = await page.locator(`li[data-code="${HOB}"][data-status=moved]`).count();
+	await type(page, HOB);
+	const movedTo = await page
+		.waitForFunction(([c, n]) => document.querySelectorAll(`li[data-code="${c}"][data-status=moved]`).length > n, [HOB, movedBefore], { timeout: 15_000 })
+		.then(() => 'moved', () => 'not moved');
+	check(movedTo === 'moved' && (await whereIs(page, HOB)) === 'Stos przy łóżku', `book moved onto the pile (${movedTo})`);
+	await page.screenshot({ path: join(out, 'book-on-pile.png'), fullPage: true });
+	const readerUrl = await addKind('ereader', 'Kindle');
+	check(await page.isVisible('svg[data-kind=ereader]'), 'e-book reader added');
+	await page.goto(roomUrl, { waitUntil: 'networkidle' });
+	await page.screenshot({ path: join(out, 'room-kinds.png'), fullPage: true });
+	check((await page.textContent('main'))?.includes('Czytnik e-booków'), 'room lists the e-book reader by kind');
+	await page.goto(readerUrl, { waitUntil: 'networkidle' });
+	await page.click('button:has-text("Zmień nazwę")');
+	await page.click('main .card button.btn-ghost.text-danger');
+	await Promise.all([page.waitForURL(roomUrl), page.click('[data-testid=delete-storage]')]);
+	check(!(await page.textContent('main'))?.includes('Kindle'), 'e-book reader deleted');
 
 	// ── Sharing ──
 	await page.goto(B + '/settings', { waitUntil: 'networkidle' });

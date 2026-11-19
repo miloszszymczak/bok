@@ -160,3 +160,43 @@ export function evenOut(layout: Layout): Layout {
 export function resize(layout: Layout, width: number, height: number): Layout {
 	return normalizeLayout({ ...layout, width, height });
 }
+
+// ── Storage kinds ──
+
+/** What a container is. Bookcases and nightstands have a designed layout; the rest are one compartment. */
+export const STORAGE_KINDS = ['bookcase', 'nightstand', 'pile', 'box', 'ereader'] as const;
+export type StorageKind = (typeof STORAGE_KINDS)[number] | 'other';
+
+export const isStorageKind = (k: unknown): k is StorageKind => k === 'other' || (STORAGE_KINDS as readonly unknown[]).includes(k);
+
+/** One compartment, no shelves to design: its only section has no label of its own. */
+export const isSingleCompartment = (kind: string | null | undefined) => kind === 'pile' || kind === 'box' || kind === 'ereader' || kind === 'other';
+
+/** Starting layout for a new container of this kind (cm; single compartments keep it forever). */
+export function kindLayout(kind: StorageKind): Layout {
+	const one = (width: number, height: number): Layout => ({ width, height, columns: [{ w: width, shelves: [height] }] });
+	switch (kind) {
+		case 'nightstand':
+			return defaultLayout(1, 2, { width: 45, height: 60 });
+		case 'pile':
+			return one(25, 40);
+		case 'box':
+			return one(50, 35);
+		case 'ereader':
+			return one(12, 17);
+		case 'other':
+			return one(40, 40);
+		default:
+			return defaultLayout(2, 5, { width: 160, height: 200 });
+	}
+}
+
+/** "Billy A3", or just "Pudło na strychu" for a single compartment (its section label is empty). */
+export function placeName(p: { containerName: string; label: string }): string {
+	return p.label ? `${p.containerName} ${p.label}` : p.containerName;
+}
+
+/** "Salon › Billy › A3", or "Sypialnia › Stos przy łóżku" for a single compartment. */
+export function placePath(p: { locationName: string; containerName: string; label: string }): string {
+	return [p.locationName, p.containerName, p.label].filter(Boolean).join(' › ');
+}

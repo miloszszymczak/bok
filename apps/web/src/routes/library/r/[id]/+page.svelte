@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { isSingleCompartment } from '@bok/core';
+	import { kindName } from '#lib/utils/storage.ts';
 	import { enhance } from '$app/forms';
 	import Icon from '#lib/components/Icon.svelte';
 	import ShelfSketch from '#lib/components/ShelfSketch.svelte';
@@ -29,10 +31,10 @@
 
 	{#each data.room.containers as c, i (c.id)}
 		<div class="card flex items-center gap-3 p-3">
-			<a href="/library/c/{c.id}" class="w-24 shrink-0"><ShelfSketch layout={c.layout} sections={c.sections} labels={false} title={c.name} /></a>
+			<a href="/library/c/{c.id}" class="w-24 shrink-0"><ShelfSketch layout={c.layout} sections={c.sections} kind={c.type} labels={false} title={c.name} /></a>
 			<a href="/library/c/{c.id}" class="min-w-0 flex-1">
 				<p class="truncate font-semibold">{c.name}</p>
-				<p class="text-sm text-muted">{m.shelves_shelf_count({ count: c.sections.length })} · {m.shelves_book_count({ count: c.count })}</p>
+				<p class="text-sm text-muted">{isSingleCompartment(c.type) ? kindName(c.type) : m.shelves_shelf_count({ count: c.sections.length })} · {m.shelves_book_count({ count: c.count })}</p>
 			</a>
 			<form method="POST" action="?/moveBookcase" use:enhance class="flex flex-col">
 				<input type="hidden" name="id" value={c.id} />
@@ -42,7 +44,7 @@
 		</div>
 	{/each}
 
-	<a href="/library/c/new?room={data.room.id}" class="btn btn-primary w-full"><Icon name="plus" size={18} />{m.shelves_add_bookcase()}</a>
+	<a href="/library/c/new?room={data.room.id}" class="btn btn-primary w-full"><Icon name="plus" size={18} />{m.storage_add()}</a>
 
 	{#if editing}
 		<div class="card space-y-3 border-danger/40 p-4">
