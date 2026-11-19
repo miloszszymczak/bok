@@ -1,21 +1,15 @@
 import { createHash } from 'node:crypto';
 import { editions } from '@bok/db';
 import type { Services } from '@bok/server';
-import { log } from '@bok/server';
+import { fetchImageSafely, log } from '@bok/server';
 import { eq } from 'drizzle-orm';
 import sharp from 'sharp';
 
 export const COVER_SIZES = { s: 120, m: 320, l: 640 } as const;
 const MAX_BYTES = 8 * 1024 * 1024;
 
-async function download(url: string): Promise<Buffer | null> {
-	const res = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(10_000), headers: { 'user-agent': 'bok/0.1 (+https://bok.mwsz.org)' } });
-	if (!res.ok) return null;
-	const type = res.headers.get('content-type') ?? '';
-	if (!type.startsWith('image/')) return null;
-	const buf = Buffer.from(await res.arrayBuffer());
-	return buf.length > 0 && buf.length <= MAX_BYTES ? buf : null;
-}
+/** Cover URLs come from provider metadata: fetched with internal addresses blocked and a size cap. */
+const download = (url: string) => fetchImageSafely(url, { maxBytes: MAX_BYTES, timeoutMs: 10_000, userAgent: 'bok/0.1 (+https://bok.mwsz.org)' });
 
 /** Usable = a real cover, not a 1×1 placeholder or a tiny thumbnail. */
 async function usable(buf: Buffer) {

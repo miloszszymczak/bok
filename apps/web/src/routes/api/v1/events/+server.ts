@@ -6,7 +6,7 @@ export const GET: RequestHandler = async ({ locals, request }) => {
 	if (!locals.user) return new Response('unauthorized', { status: 401 });
 	const userId = locals.user.id;
 	const { notifications } = locals.svc;
-	await ensureListening(locals.svc);
+	const listening = await ensureListening(locals.svc);
 	const enc = new TextEncoder();
 	let cleanup = () => {};
 	const stream = new ReadableStream<Uint8Array>({
@@ -38,6 +38,9 @@ export const GET: RequestHandler = async ({ locals, request }) => {
 			request.signal.addEventListener('abort', () => cleanup());
 			controller.enqueue(enc.encode(`retry: 5000\n\n`));
 			await send();
+			// No live updates right now: send the current count and end the stream, so the browser
+			// reconnects in 5 s (and tries LISTEN again) instead of waiting on a stream that stays silent.
+			if (!listening) cleanup();
 		},
 		cancel() {
 			cleanup();

@@ -28,8 +28,14 @@ export function createAccounts(db: Db, kv: Kv, opts: { adminEmails: string[]; st
 	return {
 		/** Called right after sign-up: profile with a generated handle + a default household. */
 		async bootstrap(u: { id: string; name: string; email: string }, locale: string) {
+			// Safe to call again (a retried sign-up hook): an account that already has a household is left alone.
+			const existing = await db.query.householdMembers.findFirst({ where: eq(householdMembers.userId, u.id), columns: { householdId: true } });
+			if (existing) return;
 			const handle = await uniqueHandle(u.name || u.email.split('@')[0]!);
 			await db.transaction(async (tx) => {
+				// Serialize concurrent bootstraps of the same user inside the transaction.
+				await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${'bootstrap:' + u.id}))`);
+				if (await tx.query.householdMembers.findFirst({ where: eq(householdMembers.userId, u.id), columns: { householdId: true } })) return;
 				await tx
 					.insert(profiles)
 					.values({
@@ -61,6 +67,12 @@ export function createAccounts(db: Db, kv: Kv, opts: { adminEmails: string[]; st
 
 		isAdmin(email: string, role?: string | null) {
 			return role === 'admin' || admins.has(email.toLowerCase());
+		},
+
+		/** Admin by role or by ADMIN_EMAILS, looked up from the user id. */
+		async isAdminUser(userId: string) {
+			const [r] = await db.select({ email: user.email, role: profiles.role }).from(user).leftJoin(profiles, eq(profiles.userId, user.id)).where(eq(user.id, userId));
+			return !!r && (r.role === 'admin' || admins.has(r.email.toLowerCase()));
 		},
 
 		/** Marks the account; the caller revokes other sessions through better-auth (they live in Valkey too). */

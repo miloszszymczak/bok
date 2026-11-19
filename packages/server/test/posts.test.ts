@@ -85,7 +85,7 @@ describe.skipIf(!url)('posts & feed (integration)', () => {
 	const catalog = createCatalog({ db, kv, metadata: fakeMetadata, queue: noQueue });
 	const accounts = createAccounts(db, kv, { adminEmails: [] });
 	const notifications = createNotifications({ db, mailer, cfg: { origin: 'http://localhost' } });
-	const social = createSocial({ db, kv, storage, notifications });
+	const social = createSocial({ db, kv, storage, notifications, isAdmin: async (id) => id === ids.friend });
 	const lists = createReadlists({ db, storage, notifications });
 	const postsSvc = createPosts({ db, storage, notifications });
 	const reading = createReading({ db, storage });
@@ -213,7 +213,7 @@ describe.skipIf(!url)('posts & feed (integration)', () => {
 		expect(await postsSvc.get(ids.stranger!, id)).toBeNull();
 		await expect(postsSvc.like(ids.stranger!, 'post', id)).rejects.toThrow();
 		await social.report(ids.friend!, { targetType: 'post', targetId: id, targetUserId: ids.author!, reason: 'spam', details: '' });
-		const [r] = await social.openReports();
+		const [r] = await social.openReports(ids.friend!);
 		expect(r?.target_text).toBe('lubisz?');
 		await social.resolve(ids.friend!, r!.id, 'hide');
 		expect(await postsSvc.get(ids.friend!, id)).toBeNull();

@@ -71,12 +71,12 @@ export class ScanQueue {
 		if (rec.status === 'queued' || rec.status === 'error') await this.db.scans.update(id, { status: 'undone' });
 		else if (rec.status === 'moved') {
 			// Undo a move = move it back where it was.
-			await this.db.scans.update(id, { status: 'undo_queued' });
+			await this.db.scans.update(id, { status: 'undo_queued', error: undefined });
 			this.kick();
 		} else if (rec.kind === 'move') await this.db.scans.update(id, { status: 'skipped' });
 		else if (rec.status === 'sending') await this.db.scans.update(id, { undoRequested: true });
 		else if (rec.status === 'added') {
-			await this.db.scans.update(id, { status: 'undo_queued' });
+			await this.db.scans.update(id, { status: 'undo_queued', error: undefined });
 			this.kick();
 		} else await this.db.scans.update(id, { status: 'skipped' });
 	}
@@ -180,6 +180,7 @@ export class ScanQueue {
 					body: JSON.stringify({ copyIds: [rec.copyId], sectionId: rec.fromSectionId ?? null })
 				});
 				if (res.status === 429 || res.status >= 500) return false;
+				if (!res.ok && res.status !== 404) return this.undoRefused(rec, res.status);
 			} catch {
 				return false;
 			}
@@ -190,11 +191,19 @@ export class ScanQueue {
 		try {
 			const res = await fetch(`/api/v1/copies/${rec.id}`, { method: 'DELETE' });
 			if (res.status === 429 || res.status >= 500) return false;
+			// 404: the copy is already gone, so the undo did happen. Anything else: it didn't.
+			if (!res.ok && res.status !== 404) return this.undoRefused(rec, res.status);
 		} catch {
 			return false;
 		}
 		await cacheRemoveCopy(this.db, rec.id);
 		await this.db.scans.update(rec.id, { status: 'undone' });
+		return true;
+	}
+
+	/** The server said no (signed out, not allowed…): keep the scan as it was and say the undo failed. */
+	private async undoRefused(rec: ScanRecord, status: number) {
+		await this.db.scans.update(rec.id, { status: rec.kind === 'move' ? 'moved' : 'added', error: status === 401 ? 'signed_out' : 'undo_failed' });
 		return true;
 	}
 }

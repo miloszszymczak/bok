@@ -54,7 +54,8 @@ const kv = (() => {
 	return { get: async (k: string) => m.get(k) ?? null, set: async (k: string, v: string) => (m.set(k, v), 'OK'), del: async (k: string) => (m.delete(k), 1), incr: async () => 1, expire: async () => 1 } as unknown as Kv;
 })();
 const sent: string[] = [];
-const queue = { send: async (_q: string, d: { importId: string }) => (sent.push(d.importId), 'job') } as unknown as Queue;
+let queueDown = false;
+const queue = { send: async (_q: string, d: { importId: string }) => { if (queueDown) throw new Error('queue down'); sent.push(d.importId); return 'job'; } } as unknown as Queue;
 const storage = { url: (k: string) => `/media/${k}`, put: async () => {} } as unknown as Storage;
 
 describe.skipIf(!url)('imports (integration)', () => {
@@ -99,8 +100,14 @@ describe.skipIf(!url)('imports (integration)', () => {
 		const pv = await imports.preview(me, id);
 		expect(pv.summary).toMatchObject({ total: 3, withIsbn: 2, read: 1, reading: 1, wantToRead: 1, owned: 1 });
 		expect((await imports.get(me, id)).options.ratingScale).toBe(5);
+		// The queue is down: confirm fails and the import goes back to preview (not stuck in queued).
+		queueDown = true;
+		await expect(imports.confirm(me, id, {})).rejects.toThrow('queue down');
+		queueDown = false;
+		expect((await imports.get(me, id)).status).toBe('preview');
 		await imports.confirm(me, id, {});
 		expect(sent).toContain(id);
+		await expect(imports.confirm(me, id, {})).rejects.toThrow('state'); // double submit
 		await imports.run(id);
 		const st = await imports.get(me, id);
 		expect(st.status).toBe('done');

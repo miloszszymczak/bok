@@ -30,8 +30,12 @@ export interface PersonRow {
 export const REPORT_REASONS = ['spam', 'abuse', 'inappropriate', 'impersonation', 'other'] as const;
 export type ReportTarget = 'profile' | 'post' | 'comment' | 'readlist';
 
-export function createSocial(deps: { db: Db; kv: Kv; storage: Storage; notifications: Notifications }) {
+export function createSocial(deps: { db: Db; kv: Kv; storage: Storage; notifications: Notifications; isAdmin?: (userId: string) => Promise<boolean> }) {
 	const { db, kv, storage, notifications } = deps;
+	/** Moderation is checked here too, not only by the admin pages (defense in depth). */
+	const assertAdmin = async (userId: string) => {
+		if (!(await (deps.isAdmin ?? (async () => false))(userId))) throw new Forbidden();
+	};
 	const { avatar } = mediaUrls(storage);
 
 	/** Visible to others: not hidden, suspended or being deleted. */
@@ -209,7 +213,8 @@ export function createSocial(deps: { db: Db; kv: Kv; storage: Storage; notificat
 			await db.insert(reports).values({ reporterId, ...input, details: input.details.slice(0, 2000) });
 		},
 
-		async openReports() {
+		async openReports(adminId: string) {
+			await assertAdmin(adminId);
 			return db.execute<{ id: string; target_type: string; target_id: string; target_user_id: string | null; reason: string; details: string; created_at: Date; reporter_handle: string | null; target_handle: string | null; target_name: string | null; target_bio: string | null; target_hidden: boolean; target_suspended: boolean; open_against: number; target_text: string | null; target_link: string | null }>(sql`
 				select r.id, r.target_type, r.target_id, r.target_user_id, r.reason, r.details, r.created_at,
 					case r.target_type
@@ -235,6 +240,7 @@ export function createSocial(deps: { db: Db; kv: Kv; storage: Storage; notificat
 
 		/** dismiss | hide (profile not shown) | suspend (hidden + signed out + can't sign in) | restore. */
 		async resolve(adminId: string, reportId: string, action: 'dismiss' | 'hide' | 'suspend') {
+			await assertAdmin(adminId);
 			const r = await db.query.reports.findFirst({ where: eq(reports.id, reportId) });
 			if (!r) throw new NotFound();
 			await db.transaction(async (tx) => {
@@ -272,7 +278,8 @@ export function createSocial(deps: { db: Db; kv: Kv; storage: Storage; notificat
 			}
 		},
 
-		async restore(userId: string) {
+		async restore(adminId: string, userId: string) {
+			await assertAdmin(adminId);
 			await db.update(profiles).set({ hiddenAt: null, suspendedAt: null }).where(eq(profiles.userId, userId));
 		},
 

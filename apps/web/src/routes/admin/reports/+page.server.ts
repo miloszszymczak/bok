@@ -10,7 +10,7 @@ async function requireAdmin(locals: App.Locals) {
 
 export const load: PageServerLoad = async ({ locals }) => {
 	await requireAdmin(locals);
-	const rows = await locals.svc.social.openReports();
+	const rows = await locals.svc.social.openReports(locals.user!.id);
 	return { reports: rows.map((r) => ({ ...r, created_at: new Date(r.created_at).toISOString() })) };
 };
 
@@ -28,7 +28,7 @@ export const actions: Actions = {
 		await requireAdmin(locals);
 		const id = String((await request.formData()).get('userId') ?? '');
 		if (!UUID.test(id)) return fail(400);
-		await locals.svc.social.restore(id);
+		await locals.svc.social.restore(locals.user!.id, id);
 		return { restored: true };
 	}
 };

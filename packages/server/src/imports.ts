@@ -215,8 +215,20 @@ export function createImports(deps: { db: Db; catalog: Catalog; editor: CatalogE
 				copies: typeof options.copies === 'boolean' ? options.copies : imp.options.copies,
 				visibility: options.visibility && ['public', 'followers', 'friends', 'private'].includes(options.visibility) ? options.visibility : imp.options.visibility
 			};
-			await db.update(imports).set({ status: 'queued', options: o, updatedAt: new Date() }).where(eq(imports.id, importId));
-			await queue.send(QUEUES.importRun, { importId }, { singletonKey: importId });
+			// preview → queued only once (double submits), and back to preview if the job can't be queued,
+			// so an import never sits in "queued" with no job behind it.
+			const [moved] = await db
+				.update(imports)
+				.set({ status: 'queued', options: o, updatedAt: new Date() })
+				.where(and(eq(imports.id, importId), eq(imports.status, 'preview')))
+				.returning({ id: imports.id });
+			if (!moved) throw new ImportError('state');
+			try {
+				await queue.send(QUEUES.importRun, { importId }, { singletonKey: importId });
+			} catch (e) {
+				await db.update(imports).set({ status: 'preview', updatedAt: new Date() }).where(and(eq(imports.id, importId), eq(imports.status, 'queued')));
+				throw e;
+			}
 		},
 
 		async cancel(userId: string, importId: string) {

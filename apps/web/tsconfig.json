@@ -4,6 +4,7 @@
 		"strict": true,
 		"types": ["$app/types", "node"]
 	},
+	"exclude": ["src/service-worker.ts"],
 	"include": [
 		"src",
 		"vite.config.ts",

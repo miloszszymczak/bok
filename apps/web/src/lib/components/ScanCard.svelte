@@ -71,6 +71,7 @@
 			{:else if scan.status === 'error'}
 				<span class="text-danger">{scan.error === 'signed_out' ? m.scan_status_signed_out() : m.scan_status_error()}</span>
 			{/if}
+			{#if (scan.status === 'added' || scan.status === 'moved') && scan.error}· <span class="text-danger" data-testid="undo-failed">{scan.error === 'signed_out' ? m.scan_status_signed_out() : m.scan_undo_failed()}</span>{/if}
 			{#if pending && scan.localHint === 'owned'}· <span class="text-warn">{m.scan_hint_owned()}</span>{/if}
 		</p>
 		{#if b?.authors.length && !faded}<p class="truncate text-xs text-muted">{b.authors.join(', ')}</p>{/if}

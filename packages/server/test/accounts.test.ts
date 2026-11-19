@@ -78,6 +78,13 @@ describe.skipIf(!url)('accounts & sweep regressions (integration)', () => {
 		return r;
 	};
 
+	it('bootstrap is idempotent: a retried sign-up hook adds no second household', async () => {
+		const again = () => accounts.bootstrap({ id: ids.ann!, name: 'ann', email: 'ann@test.local' }, 'en');
+		await Promise.all([again(), again()]);
+		const rows = await db.execute<{ n: number }>(sql`select count(*)::int as n from household_members where user_id = ${ids.ann!}`);
+		expect(rows[0]!.n).toBe(1);
+	});
+
 	it('purge after the grace period: sessions gone, avatar file deleted, loans kept for the other side', async () => {
 		const hob = await scan('ann');
 		await loans.lend(ids.ann!, { copyId: hob.copy.id, borrowerId: ids.ben!, dueOn: '2026-12-01' });

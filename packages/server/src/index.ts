@@ -25,6 +25,7 @@ import { createValkey } from './valkey.ts';
 export * from './config.ts';
 export * from './errors.ts';
 export * from './media.ts';
+export * from './safe-fetch.ts';
 export * from './log.ts';
 export * from './valkey.ts';
 export * from './storage.ts';
@@ -69,7 +70,7 @@ export async function createServices(cfg: ServerConfig, role: 'web' | 'worker', 
 	const reading = createReading({ db, storage });
 	const tagging = createTagging({ db, storage });
 	const notifications = createNotifications({ db, mailer, cfg: { vapid: cfg.vapid, origin: cfg.origin } });
-	const social = createSocial({ db, kv, storage, notifications });
+	const social = createSocial({ db, kv, storage, notifications, isAdmin: accounts.isAdminUser });
 	const readlists = createReadlists({ db, storage, notifications });
 	const posts = createPosts({ db, storage, notifications });
 	const loans = createLoans({ db, storage, notifications });

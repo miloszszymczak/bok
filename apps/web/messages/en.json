@@ -894,5 +894,6 @@
 	"scan_assign_failed": "Couldn't save the label, try again",
 	"scan_wedge_badge": "Scanner",
 	"scan_tip_labels": "Tip: scan a shelf label to switch shelves. USB and Bluetooth barcode scanners work too.",
-	"scan_tip_labels_check": "Scan a shelf label to open that shelf. USB and Bluetooth barcode scanners work too."
+	"scan_tip_labels_check": "Scan a shelf label to open that shelf. USB and Bluetooth barcode scanners work too.",
+	"scan_undo_failed": "Couldn't undo"
 }

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { Resvg } from '@resvg/resvg-js';
-import type { Storage } from '@bok/server';
+import { fetchImageSafely, type Storage } from '@bok/server';
 import satori from 'satori';
 import sharp from 'sharp';
 
@@ -56,8 +56,7 @@ export async function imageData(storage: Storage, ref: { key?: string | null; sr
 			if (obj) buf = Buffer.from(await new Response(obj.body).arrayBuffer());
 		}
 		if (!buf && ref.src) {
-			const res = await fetch(ref.src, { signal: AbortSignal.timeout(3000), headers: { 'user-agent': 'bok/0.1 (+https://bok.mwsz.org)' } });
-			if (res.ok && (res.headers.get('content-type') ?? '').startsWith('image/')) buf = Buffer.from(await res.arrayBuffer());
+			buf = await fetchImageSafely(ref.src, { maxBytes: 8 * 1024 * 1024, timeoutMs: 3000, userAgent: 'bok/0.1 (+https://bok.mwsz.org)' });
 		}
 		if (!buf) return null;
 		const out = await sharp(buf).resize({ width, withoutEnlargement: true }).flatten({ background: '#ffffff' }).jpeg({ quality: 82 }).toBuffer();

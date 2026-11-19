@@ -97,7 +97,7 @@ describe.skipIf(!url)('social (integration)', () => {
 	const shelves = createShelves({ db, storage });
 	const library = createLibrary({ db, catalog, accounts, storage, shelves });
 	const notifications = createNotifications({ db, mailer, cfg: { vapid: { ...vapid, subject: 'mailto:test@bok.local' }, origin: 'http://localhost' } });
-	const social = createSocial({ db, kv, storage, notifications });
+	const social = createSocial({ db, kv, storage, notifications, isAdmin: async (id) => id === ids.owner });
 	const ids: Record<string, string> = {};
 
 	async function mk(name: string) {
@@ -225,13 +225,17 @@ describe.skipIf(!url)('social (integration)', () => {
 		const h = (await db.query.profiles.findFirst({ where: eq(profiles.userId, ids.stranger!) }))!.handle;
 		await social.report(ids.owner!, { targetType: 'profile', targetId: ids.stranger!, targetUserId: ids.stranger!, reason: 'spam', details: 'x' });
 		await social.report(ids.friend!, { targetType: 'profile', targetId: ids.stranger!, targetUserId: ids.stranger!, reason: 'abuse', details: '' });
-		const open = await social.openReports();
+		const open = await social.openReports(ids.owner!);
 		expect(open).toHaveLength(2);
+		// Moderation is refused to non-admins by the service itself.
+		await expect(social.openReports(ids.friend!)).rejects.toThrow();
+		await expect(social.resolve(ids.friend!, open[0]!.id, 'dismiss')).rejects.toThrow();
+		await expect(social.restore(ids.friend!, ids.stranger!)).rejects.toThrow();
 		await social.resolve(ids.owner!, open[0]!.id, 'suspend');
-		expect(await social.openReports()).toHaveLength(0);
+		expect(await social.openReports(ids.owner!)).toHaveLength(0);
 		expect(await social.profile(ids.follower!, h)).toBeNull();
 		expect(await social.isSuspended(ids.stranger!)).toBe(true);
-		await social.restore(ids.stranger!);
+		await social.restore(ids.owner!, ids.stranger!);
 		expect(await social.profile(ids.follower!, h)).not.toBeNull();
 	});
 });
